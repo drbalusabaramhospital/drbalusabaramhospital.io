@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Clinic Queue" />
+<link rel="apple-touch-icon" href="assets/icon-192.png" />
+<title>Doctor — Clinic Queue</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" type="image/svg+xml" href="assets/icon.svg" />
+<link rel="stylesheet" href="css/styles.css" />
+
+<script>
+// Backup reminder banner — checks localStorage and injects a banner if overdue
+(function() {
+  const days = Number(localStorage.getItem("clinic-queue-backup-reminder-days") || 0);
+  if (days === 0) return;
+  const last = localStorage.getItem("clinic-queue-last-backup");
+  const overdue = !last || (Date.now() - new Date(last).getTime()) > days * 86400000;
+  if (!overdue) return;
+  document.addEventListener("DOMContentLoaded", function() {
+    const header = document.querySelector(".app-shell > header");
+    if (!header) return;
+    const banner = document.createElement("div");
+    banner.className = "backup-reminder-banner";
+    const daysAgo = last ? Math.floor((Date.now()-new Date(last).getTime())/86400000) : null;
+    banner.innerHTML = `<span>⚠</span>
+      <span>${daysAgo !== null ? `Backup overdue — last backup was ${daysAgo} day(s) ago.` : "No backup recorded yet."} <a href="backup.html">Back up now →</a></span>
+      <button onclick="this.parentElement.remove()" title="Dismiss">✕</button>`;
+    header.after(banner);
+  });
+})();
+</script>
+<script>
+  const t = localStorage.getItem("clinic-queue-theme") || "light";
+  document.addEventListener("DOMContentLoaded", () => {
+    if (t === "dark")     document.body.classList.add("theme-dark");
+    if (t === "midnight") document.body.classList.add("theme-midnight");
+    if (t === "forest")   document.body.classList.add("theme-forest");
+    if (t === "sunset")   document.body.classList.add("theme-sunset");
+  });
+</script>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="brand"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" width="28" height="28" aria-hidden="true" style="flex-shrink:0;border-radius:6px;">
+  <rect width="72" height="72" rx="16" fill="white"/>
+  <text x="36" y="37" text-anchor="middle" font-size="28" font-weight="800" fill="#0F4C4F"
+    font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif">Q</text>
+  <polyline points="8,56 15,56 19,48 23,64 27,44 31,60 35,56 64,56"
+    fill="none" stroke="#E8A23D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg> <span data-clinic-name>Clinic Queue</span></div>
+    <nav>
+      <a href="doctor.html" class="active">My Queue</a>
+      <a href="patients.html">Patients</a>
+      <a href="billing.html">Billing</a>
+      <a href="board.html">Queue Board</a>
+    </nav>
+    <div class="user-pill"><span id="user-email">—</span><button id="logout-btn">Sign out</button></div>
+    <button id="theme-toggle-btn" title="Switch theme" style="background:none;border:none;cursor:pointer;font-size:1.1rem;padding:0.2rem 0.4rem;opacity:0.8;" aria-label="Switch theme">🎨</button>
+  </header>
+
+  <main class="page">
+    <div class="page-header flex-between">
+      <div>
+        <h1 id="doctor-name">My queue</h1>
+        <p>Call patients, run consultations, and look up patient history.</p>
+      </div>
+      <div>
+        <button class="btn btn-outline" id="break-btn">Take a short break</button>
+        <button class="btn btn-outline" id="end-break-btn" style="display:none;">End break</button>
+      </div>
+    </div>
+
+    <div id="break-banner" style="display:none;" class="warning-box">
+      ☕ <div><strong>On break</strong> <span id="break-detail"></span> — new tokens won't be called until you end the break. Wait-time estimates have been refreshed for your queue.</div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2>Now serving / next up</h2>
+        <div id="now-serving-box"></div>
+        <hr class="section-divider" />
+        <h3>Waiting (FIFO by default — tap any token to call it out of order)</h3>
+        <div id="waiting-list"><div class="empty-state">No patients waiting.</div></div>
+      </div>
+
+      <div class="card">
+        <h2>Patient lookup</h2>
+        <p class="helper">Search by Patient ID or simulate a barcode scan to pull up history.</p>
+        <div class="field" style="display:flex;gap:0.5rem;">
+          <input id="lookup-input" placeholder="Enter Patient ID or scan barcode…" style="flex:1;" />
+          <div id="scan-btn-container"></div>
+        </div>
+        <button class="btn btn-outline btn-block" id="lookup-btn">Look up patient</button>
+        <div id="lookup-result"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Consultation modal -->
+<div id="consult-modal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(28,36,34,0.55);z-index:100;align-items:center;justify-content:center;overflow:auto;padding:1.5rem;">
+  <div class="card" style="max-width:560px;width:100%;">
+    <h2>Consultation — <span id="consult-token-label"></span></h2>
+    <div id="consult-patient-info" class="small muted" style="margin-bottom:0.75rem;"></div>
+    <div id="consult-history" style="max-height:40vh;overflow-y:auto;"></div>
+    <hr class="section-divider" />
+    <div class="field"><label for="c-notes">Consultation notes</label><textarea id="c-notes" rows="4" placeholder="Diagnosis, advice, follow-up…"></textarea></div>
+    <div class="flex-between">
+      <button class="btn btn-outline" id="consult-close">Close</button>
+      <button class="btn btn-primary" id="consult-complete">Complete consultation</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import {
+  auth, authReady, db, onAuthStateChanged, signOut,
+  collection, doc, updateDoc, getDoc, getDocs, addDoc, onSnapshot,
+  query, where, orderBy
+} from "./js/firebase-config.js";
+import { computeACT, calculateETAs, formatETA, todayKey, STATUS_LABELS, NO_SHOW_GRACE_SECONDS, applyClinicBranding, fmtDate, earliestAvailableSlot } from "./js/queue-logic.js";
+import { attachThemeToggle } from "./js/theme.js";
+attachThemeToggle();
+import { attachScanButton } from "./js/barcode-scanner.js";
+
+document.getElementById("scan-btn-container").appendChild(
+  attachScanButton(document.getElementById("lookup-input"), { onScan: () => document.getElementById("lookup-btn").click() })
+);
+
+applyClinicBranding();
+await authReady;
+
+let currentUser = null;
+let doctorId = null;
+let doctorOnBreakUntil = null;
+let act = 8 * 60;
+
+// Bind sign-out immediately, before any other setup, so it always works
+// even if something later in this script throws (e.g. a broken doctor link).
+document.getElementById("logout-btn").onclick = () => signOut(auth).then(() => window.location.href = "index.html");
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { window.location.href = "index.html"; return; }
+  currentUser = user;
+  document.getElementById("user-email").textContent = user.email;
+
+  let userSnap;
+  try {
+    userSnap = await getDoc(doc(db, "users", user.uid));
+  } catch (err) {
+    console.error("Failed to load user role document:", err);
+    alert("Couldn't load your account details. Check your connection and try refreshing.");
+    return;
+  }
+
+  if (!userSnap.exists() || userSnap.data().role !== "doctor") {
+    alert("This login isn't linked to a doctor profile yet. Ask an admin to set it up.");
+    return;
+  }
+
+  doctorId = userSnap.data().doctorId;
+  if (!doctorId) {
+    alert("Your login is marked as a doctor but isn't linked to a specific doctor profile yet. Ask an admin to fix this in Admin Setup → Link a staff login.");
+    return;
+  }
+
+  let docSnap;
+  try {
+    docSnap = await getDoc(doc(db, "doctors", doctorId));
+  } catch (err) {
+    console.error("Failed to load doctor profile:", err);
+    alert("Couldn't load your doctor profile. Check your connection and try refreshing.");
+    return;
+  }
+
+  if (!docSnap.exists()) {
+    alert("Your linked doctor profile no longer exists. Ask an admin to re-link your login in Admin Setup.");
+    return;
+  }
+
+  document.getElementById("doctor-name").textContent = `${docSnap.data().name}'s queue`;
+  act = await computeACT(doctorId);
+  watchQueue();
+});
+
+// ---- Break controls ----
+document.getElementById("break-btn").onclick = async () => {
+  const mins = prompt("Break duration in minutes:", "10");
+  if (!mins) return;
+  doctorOnBreakUntil = Date.now() + Number(mins) * 60 * 1000;
+  await updateDoc(doc(db, "doctors", doctorId), { onBreakUntil: doctorOnBreakUntil });
+  document.getElementById("break-btn").style.display = "none";
+  document.getElementById("end-break-btn").style.display = "inline-flex";
+  document.getElementById("break-banner").style.display = "flex";
+  document.getElementById("break-detail").textContent = `Back around ${formatETA(doctorOnBreakUntil)}`;
+};
+document.getElementById("end-break-btn").onclick = async () => {
+  doctorOnBreakUntil = null;
+  await updateDoc(doc(db, "doctors", doctorId), { onBreakUntil: null });
+  document.getElementById("break-btn").style.display = "inline-flex";
+  document.getElementById("end-break-btn").style.display = "none";
+  document.getElementById("break-banner").style.display = "none";
+};
+
+// ---- Queue ----
+function watchQueue() {
+  const visitsRef = collection(db, "visits");
+  onSnapshot(query(visitsRef, where("visitDate", "==", todayKey()), orderBy("tokenNumber")), (snap) => {
+    const all = [];
+    snap.forEach((d) => all.push({ id: d.id, ...d.data() }));
+    const mine = all.filter((v) => v.doctorId === doctorId || (v.preferredDoctorIds || []).includes(doctorId));
+    _lastQueueVisits = mine;
+    renderQueue(mine);
+    ensureSlotTicker();
+  });
+}
+
+function renderQueue(visits) {
+  const active = visits.filter((v) => ["waiting", "called", "in_consultation"].includes(v.status));
+  const eligible = active
+    .filter((v) => v.doctorId === doctorId || v.status === "waiting")
+    .sort((a, b) => (a.queueSequence ?? a.tokenNumber) - (b.queueSequence ?? b.tokenNumber));
+  const etas = calculateETAs(eligible.map(v => ({...v, consultStartAt: v.consultStartAt ? new Date(v.consultStartAt) : null})), act, doctorOnBreakUntil);
+
+  const serving = active.find((v) => v.doctorId === doctorId && (v.status === "called" || v.status === "in_consultation"));
+  const servingBox = document.getElementById("now-serving-box");
+  if (serving) {
+    servingBox.innerHTML = `
+      <div class="flex-between">
+        <div><span class="token-tag amber pulse">#${serving.tokenNumber}</span> <strong>${escapeHtml(serving.patientName)}</strong></div>
+        <span class="badge badge-${serving.status}">${STATUS_LABELS[serving.status]}</span>
+      </div>
+      <div style="margin-top:0.75rem;display:flex;flex-direction:column;gap:0.5rem;">
+        ${serving.status === "called"
+          ? `<button class="btn btn-primary btn-block" data-start="${serving.id}">Start consultation</button>
+             <button class="btn btn-outline btn-block" data-uncall="${serving.id}" title="Patient did not respond — return token to queue in the same position">↩ Return to queue (no response)</button>`
+          : `<button class="btn btn-primary btn-block" data-open-consult="${serving.id}">Open consultation</button>`}
+      </div>`;
+    servingBox.querySelectorAll("[data-start]").forEach((b) => b.addEventListener("click", () => startConsultation(b.dataset.start)));
+    servingBox.querySelectorAll("[data-open-consult]").forEach((b) => b.addEventListener("click", () => openConsultModal(serving)));
+    servingBox.querySelectorAll("[data-uncall]").forEach((b) => b.addEventListener("click", () => returnToQueue(b.dataset.uncall)));
+  } else {
+    servingBox.innerHTML = '<div class="empty-state">No patient currently called. Tap a waiting token to call them.</div>';
+  }
+
+  const waiting = active.filter((v) => v.status === "waiting").sort((a,b) => (a.queueSequence ?? a.tokenNumber) - (b.queueSequence ?? b.tokenNumber));
+  const list = document.getElementById("waiting-list");
+  if (waiting.length === 0) { list.innerHTML = '<div class="empty-state">No patients waiting.</div>'; return; }
+  list.innerHTML = waiting.map((v, idx) => {
+    const hasVitals = !!v.vitals;
+    const isSlot = !!v.slotTime;
+    const slotMs = isSlot ? new Date(v.slotTime).getTime() : null;
+    const now = Date.now();
+    const slotUrgent = isSlot && now >= slotMs - 5 * 60 * 1000;    // within 5 min
+    const slotDue    = isSlot && now >= slotMs;                      // time has arrived
+    const rowStyle = slotDue
+      ? "background:#FEE2E2;border-left:3px solid #C03535;"
+      : slotUrgent
+        ? "background:#FEF3C7;border-left:3px solid var(--amber-500);"
+        : hasVitals
+          ? "border-left:3px solid var(--sage-500);background:var(--sage-100);"
+          : "";
+    const slotBadge = isSlot
+      ? `<span class="badge" style="margin-left:0.4rem;background:${slotDue ? "#FEE2E2;color:#C03535" : slotUrgent ? "#FEF3C7;color:#92400E" : "var(--amber-100);color:var(--amber-700)"};">
+           ${slotDue ? "🔔" : "🕐"} ${formatETA(slotMs)}
+         </span>`
+      : "";
+    return `
+    <div class="flex-between waiting-row" data-visit-id="${v.id}" style="padding:0.6rem 0.75rem;border-bottom:1px solid var(--paper-dim);${rowStyle}">
+      <div>
+        <span class="token-tag${slotDue ? " pulse" : ""}">#${v.tokenNumber}</span>
+        <strong style="margin-left:0.5rem;">${escapeHtml(v.patientName)}</strong>
+        ${idx === 0 && !isSlot ? '<span class="badge badge-waiting" style="margin-left:0.5rem;">Next up</span>' : ""}
+        ${slotBadge}
+        ${(v.preferredDoctorIds || []).length > 1 ? '<span class="small muted" style="margin-left:0.5rem;">multi-doctor</span>' : ""}
+        <span class="vitals-indicator ${hasVitals ? "vitals-done" : "vitals-pending"}" title="${hasVitals ? "Vitals captured" : "Vitals not yet captured"}">🩺</span>
+      </div>
+      <div style="text-align:right;">
+        <div class="small muted">${isSlot ? "Slot" : "ETA"} ${formatETA(isSlot ? slotMs : etas[v.id])}</div>
+        <button class="btn btn-sm btn-amber" data-call="${v.id}" ${serving ? "disabled" : ""}>Call</button>
+      </div>
+    </div>`;
+  }).join("");
+  list.querySelectorAll("[data-call]").forEach((b) => b.addEventListener("click", () => callToken(b.dataset.call)));
+}
+
+// Re-render queue every 30 seconds so slot alert colours update as time passes
+let _lastQueueVisits = [];
+let _slotTickerStarted = false;
+function ensureSlotTicker() {
+  if (_slotTickerStarted) return;
+  _slotTickerStarted = true;
+  setInterval(() => { if (_lastQueueVisits.length > 0) renderQueue(_lastQueueVisits); }, 30_000);
+}
+
+async function callToken(visitId) {
+  await updateDoc(doc(db, "visits", visitId), {
+    status: "called",
+    doctorId,
+    calledAt: new Date().toISOString(),
+    calledBy: currentUser.uid,
+  });
+}
+
+// Patient didn't respond to the call — put the token back to waiting at its
+// original queue position. queueSequence is unchanged so it stays in the same
+// spot relative to other waiting tokens. We clear doctorId so it becomes available
+// to all preferred doctors again (or set it back to null for multi-doctor tokens).
+async function returnToQueue(visitId) {
+  await updateDoc(doc(db, "visits", visitId), {
+    status: "waiting",
+    doctorId: null,
+    calledAt: null,
+    calledBy: null,
+  });
+}
+
+async function startConsultation(visitId) {
+  await updateDoc(doc(db, "visits", visitId), { status: "in_consultation", consultStartAt: new Date().toISOString() });
+  const snap = await getDoc(doc(db, "visits", visitId));
+  openConsultModal({ id: visitId, ...snap.data() });
+}
+
+async function openConsultModal(visit) {
+  document.getElementById("consult-token-label").textContent = `#${visit.tokenNumber}`;
+  document.getElementById("consult-patient-info").textContent = `${visit.patientName} · ${visit.patientAge}/${visit.patientGender}`;
+  document.getElementById("c-notes").value = "";
+  document.getElementById("consult-modal").dataset.visitId = visit.id;
+
+  const histBox = document.getElementById("consult-history");
+  histBox.innerHTML = "<p class='small muted'>Loading vitals & history…</p>";
+
+  // Current visit's own prescription (captured at reception during intake)
+  const currentRx = (() => {
+    const imgs = visit.prescriptions && Array.isArray(visit.prescriptions) ? visit.prescriptions
+      : (visit.prescription?.dataUrl ? [{ id: "legacy", pageNumber: 1, ...visit.prescription }] : []);
+    if (imgs.length === 0) return "";
+    return `<div class="card" style="background:var(--paper-dim);margin-bottom:0.75rem;">
+      <strong class="small">Prescription for this visit (${imgs.length} page(s))</strong>
+      <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.4rem;">
+        ${imgs.map((img, i) => `
+          <div style="position:relative;width:100px;">
+            <img src="${img.dataUrl}" alt="p.${img.pageNumber || i + 1}"
+              style="width:100px;height:75px;object-fit:cover;border-radius:5px;border:1px solid var(--line);display:block;cursor:pointer;"
+              onclick="this.parentElement.querySelector('.rx-lb').style.display='flex'" loading="lazy" />
+            <span style="position:absolute;top:3px;left:4px;background:rgba(0,0,0,0.55);color:white;font-size:0.6rem;padding:1px 4px;border-radius:2px;">
+              p.${img.pageNumber || i + 1}
+            </span>
+            <div class="rx-lb" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(0,0,0,0.92);z-index:400;flex-direction:column;">
+              <div style="display:flex;justify-content:flex-end;padding:0.6rem 0.75rem;flex-shrink:0;">
+                <button onclick="this.closest('.rx-lb').style.display='none'"
+                  style="background:rgba(255,255,255,0.15);border:none;color:white;font-size:1.4rem;line-height:1;width:2.2rem;height:2.2rem;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;"
+                  aria-label="Close image preview">✕</button>
+              </div>
+              <div style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:0 1rem 1rem;">
+                <img src="${img.dataUrl}" alt="Prescription page ${img.pageNumber || i + 1}"
+                  style="max-width:100%;border-radius:8px;touch-action:pan-x pan-y;display:block;" />
+              </div>
+            </div>
+          </div>`).join("")}
+      </div>
+    </div>`;
+  })();
+
+  const vitalsHtml = visit.vitals ? `
+    <div class="card" style="background:var(--paper-dim);margin-bottom:0.75rem;">
+      <strong class="small">Intake vitals</strong>
+      <p class="small">Weight: ${visit.vitals.weight || "—"} kg · Temp: ${visit.vitals.temperature || "—"}°F · BP: ${visit.vitals.bpSystolic || "—"}/${visit.vitals.bpDiastolic || "—"}</p>
+      ${visit.vitals.chiefComplaint ? `<p class="small">Reason: ${escapeHtml(visit.vitals.chiefComplaint)}</p>` : ""}
+      ${visit.vitals.priorNotes ? `<p class="small">Prior notes: ${escapeHtml(visit.vitals.priorNotes)}</p>` : ""}
+    </div>` : "<p class='small muted'>No intake vitals recorded.</p>";
+
+  const history = await getLastVisits(visit.patientId, visit.id);
+  histBox.innerHTML = currentRx + vitalsHtml + renderHistory(history);
+  document.getElementById("consult-modal").style.display = "flex";
+}
+
+document.getElementById("consult-close").onclick = () => document.getElementById("consult-modal").style.display = "none";
+document.getElementById("consult-complete").onclick = async () => {
+  const visitId = document.getElementById("consult-modal").dataset.visitId;
+  const notes = document.getElementById("c-notes").value.trim();
+  await updateDoc(doc(db, "visits", visitId), {
+    status: "completed",
+    consultEndAt: new Date().toISOString(),
+    doctorNotes: notes,
+  });
+  document.getElementById("consult-modal").style.display = "none";
+  act = await computeACT(doctorId); // refresh rolling average for next ETA calc
+};
+
+async function getLastVisits(patientId, excludeVisitId) {
+  let limit = 3;
+  try {
+    const snap = await getDoc(doc(db, "clinicSettings", "main"));
+    if (snap.exists() && snap.data().visitHistoryCount !== undefined) {
+      limit = Number(snap.data().visitHistoryCount);
+    }
+  } catch (err) {
+    console.warn("Could not read visitHistoryCount, using default of 3:", err);
+  }
+
+  // Fetch all visits for this patient in one query.
+  // Include a visit in the history if: it's completed (has notes/vitals/fees to review)
+  // OR it has a prescription captured (can happen before completion or even on a cancelled visit).
+  const snap = await getDocs(query(collection(db, "visits"), where("patientId", "==", patientId)));
+  const visits = [];
+  snap.forEach((d) => {
+    if (d.id === excludeVisitId) return;
+    const v = { id: d.id, ...d.data() };
+    const hasPrescription = v.prescriptions?.length > 0 || !!v.prescription?.dataUrl;
+    if (v.status === "completed" || hasPrescription) visits.push(v);
+  });
+  visits.sort((a, b) => new Date(b.consultEndAt || b.issuedAt || 0) - new Date(a.consultEndAt || a.issuedAt || 0));
+  return limit === 0 ? visits : visits.slice(0, limit);
+}
+
+function renderHistory(visits) {
+  if (visits.length === 0) return "<p class='small muted'>No prior visits on record.</p>";
+  return `<strong class="small">Last ${visits.length} visit(s)</strong>` + visits.map((v) => {
+    const savedImages = v.prescriptions && Array.isArray(v.prescriptions) ? v.prescriptions
+      : (v.prescription && v.prescription.dataUrl ? [{ id: "legacy", pageNumber: 1, ...v.prescription }] : []);
+    const rxSection = savedImages.length > 0
+      ? `<details style="margin-top:0.4rem;">
+           <summary class="small" style="cursor:pointer;color:var(--teal-900);font-weight:600;">
+             📋 ${savedImages.length} prescription page(s) — ${savedImages.reduce((s, i) => s + (i.compressedSizeKb || 0), 0)} KB total
+           </summary>
+           <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.5rem;">
+             ${savedImages.map((img, i) => `
+               <div style="position:relative;width:100px;">
+                 <img src="${img.dataUrl}" alt="p.${img.pageNumber || i + 1}"
+                   style="width:100px;height:75px;object-fit:cover;border-radius:5px;border:1px solid var(--line);display:block;cursor:pointer;"
+                   onclick="this.parentElement.querySelector('.rx-lb').style.display='flex'" loading="lazy" />
+                 <span style="position:absolute;top:3px;left:4px;background:rgba(0,0,0,0.55);color:white;font-size:0.6rem;padding:1px 4px;border-radius:2px;">
+                   p.${img.pageNumber || i + 1}
+                 </span>
+                 <div class="rx-lb" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(0,0,0,0.92);z-index:400;flex-direction:column;">
+                   <div style="display:flex;justify-content:flex-end;padding:0.6rem 0.75rem;flex-shrink:0;">
+                     <button onclick="this.closest('.rx-lb').style.display='none'"
+                       style="background:rgba(255,255,255,0.15);border:none;color:white;font-size:1.4rem;line-height:1;width:2.2rem;height:2.2rem;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;"
+                       aria-label="Close image preview">✕</button>
+                   </div>
+                   <div style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:0 1rem 1rem;">
+                     <img src="${img.dataUrl}" alt="Prescription page ${img.pageNumber || i + 1}"
+                       style="max-width:100%;border-radius:8px;touch-action:pan-x pan-y;display:block;" />
+                   </div>
+                 </div>
+                 <button class="btn btn-sm btn-danger" data-delete-rx="${v.id}:${img.id}"
+                   style="width:100%;margin-top:0.2rem;font-size:0.7rem;padding:0.15rem 0;">Delete p.${img.pageNumber || i + 1}</button>
+               </div>`).join("")}
+           </div>
+         </details>`
+      : `<p class="small muted" style="margin-top:0.3rem;">No prescription image on record.</p>`;
+    return `
+    <div style="padding:0.5rem 0;border-bottom:1px dashed var(--line);">
+      <p class="small"><strong>${fmtDate(v.visitDate)}</strong> — ${v.doctorNotes ? escapeHtml(v.doctorNotes) : '<span class="muted">No notes recorded</span>'}</p>
+      ${v.vitals ? `<p class="small muted">Wt ${v.vitals.weight || "—"}kg · BP ${v.vitals.bpSystolic || "—"}/${v.vitals.bpDiastolic || "—"}</p>` : ""}
+      ${rxSection}
+    </div>`;
+  }).join("");
+}
+
+// ---- Patient lookup (simulated barcode scan via manual ID entry) ----
+document.getElementById("lookup-btn").onclick = async () => {
+  const idVal = document.getElementById("lookup-input").value.trim();
+  const resultBox = document.getElementById("lookup-result");
+  if (!idVal) return;
+
+  let patientId, p;
+  // Try matching the human-readable Patient ID (e.g. CLN-000123) first.
+  const codeSnap = await getDocs(query(collection(db, "patients"), where("patientCode", "==", idVal.toUpperCase())));
+  if (!codeSnap.empty) {
+    patientId = codeSnap.docs[0].id;
+    p = codeSnap.docs[0].data();
+  } else {
+    // Fall back to a raw Firestore document ID, for older records created before patientCode existed.
+    const directSnap = await getDoc(doc(db, "patients", idVal));
+    if (directSnap.exists()) { patientId = idVal; p = directSnap.data(); }
+  }
+
+  if (!p) { resultBox.innerHTML = '<p class="helper">No patient found with that ID.</p>'; return; }
+  const history = await getLastVisits(patientId, null);
+  resultBox.innerHTML = `
+    <div class="card" style="background:var(--paper-dim);margin-top:0.75rem;">
+      <strong>${escapeHtml(p.name)}</strong> · ${p.age}/${p.gender} · ${escapeHtml(p.mobile)} <span class="small muted">· ${p.patientCode || "no ID"}</span>
+      ${renderHistory(history)}
+    </div>`;
+};
+
+async function deleteRx(dataValue, btn) {
+  if (!confirm("Delete this prescription page? This cannot be undone.")) return;
+  const [visitId, imageId] = dataValue.split(":");
+  btn.textContent = "Deleting…"; btn.disabled = true;
+  try {
+    // Fetch current prescriptions array, remove the target page, renumber, write back
+    const visitSnap = await getDoc(doc(db, "visits", visitId));
+    if (!visitSnap.exists()) throw new Error("Visit not found");
+    const visitData = visitSnap.data();
+    const existing = visitData.prescriptions && Array.isArray(visitData.prescriptions)
+      ? visitData.prescriptions
+      : (visitData.prescription ? [{ id: "legacy", pageNumber: 1, ...visitData.prescription }] : []);
+    const updated = existing
+      .filter((x) => x.id !== imageId)
+      .map((x, i) => ({ ...x, pageNumber: i + 1 }));
+    await updateDoc(doc(db, "visits", visitId), { prescriptions: updated, prescription: null });
+    // Replace the deleted thumbnail with a "deleted" note in-place
+    btn.closest("div[style*='position:relative']").outerHTML =
+      `<p class='small muted' style='font-size:0.72rem;'>Page deleted</p>`;
+  } catch (err) {
+    btn.textContent = "Delete";
+    btn.disabled = false;
+    alert(`Delete failed: ${err.message}`);
+  }
+}
+
+// Delegated handler for delete-rx buttons injected into history sections
+["consult-history", "lookup-result"].forEach((containerId) => {
+  document.getElementById(containerId).addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-delete-rx]");
+    if (btn) deleteRx(btn.dataset.deleteRx, btn);
+  });
+});
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+</script>
+<script>if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(()=>{});}</script>
+</body>
+</html>

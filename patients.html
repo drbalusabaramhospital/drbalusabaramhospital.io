@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Clinic Queue" />
+<link rel="apple-touch-icon" href="assets/icon-192.png" />
+<title>Patients — Clinic Queue</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" type="image/svg+xml" href="assets/icon.svg" />
+<link rel="stylesheet" href="css/styles.css" />
+
+<script>
+// Backup reminder banner — checks localStorage and injects a banner if overdue
+(function() {
+  const days = Number(localStorage.getItem("clinic-queue-backup-reminder-days") || 0);
+  if (days === 0) return;
+  const last = localStorage.getItem("clinic-queue-last-backup");
+  const overdue = !last || (Date.now() - new Date(last).getTime()) > days * 86400000;
+  if (!overdue) return;
+  document.addEventListener("DOMContentLoaded", function() {
+    const header = document.querySelector(".app-shell > header");
+    if (!header) return;
+    const banner = document.createElement("div");
+    banner.className = "backup-reminder-banner";
+    const daysAgo = last ? Math.floor((Date.now()-new Date(last).getTime())/86400000) : null;
+    banner.innerHTML = `<span>⚠</span>
+      <span>${daysAgo !== null ? `Backup overdue — last backup was ${daysAgo} day(s) ago.` : "No backup recorded yet."} <a href="backup.html">Back up now →</a></span>
+      <button onclick="this.parentElement.remove()" title="Dismiss">✕</button>`;
+    header.after(banner);
+  });
+})();
+</script>
+<script>
+  const t = localStorage.getItem("clinic-queue-theme") || "light";
+  document.addEventListener("DOMContentLoaded", () => {
+    if (t === "dark")     document.body.classList.add("theme-dark");
+    if (t === "midnight") document.body.classList.add("theme-midnight");
+    if (t === "forest")   document.body.classList.add("theme-forest");
+    if (t === "sunset")   document.body.classList.add("theme-sunset");
+  });
+</script>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="brand"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" width="28" height="28" aria-hidden="true" style="flex-shrink:0;border-radius:6px;">
+  <rect width="72" height="72" rx="16" fill="white"/>
+  <text x="36" y="37" text-anchor="middle" font-size="28" font-weight="800" fill="#0F4C4F"
+    font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif">Q</text>
+  <polyline points="8,56 15,56 19,48 23,64 27,44 31,60 35,56 64,56"
+    fill="none" stroke="#E8A23D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg> <span data-clinic-name>Clinic Queue</span></div>
+    <nav id="nav-links">
+      <a href="reception.html">Reception</a>
+      <a href="patients.html" class="active">Patients</a>
+      <a href="board.html">Queue Board</a>
+    </nav>
+    <div class="user-pill"><span id="user-email">—</span><button id="logout-btn">Sign out</button></div>
+    <button id="theme-toggle-btn" title="Switch theme" style="background:none;border:none;cursor:pointer;font-size:1.1rem;padding:0.2rem 0.4rem;opacity:0.8;" aria-label="Switch theme">🎨</button>
+  </header>
+
+  <main class="page">
+    <div class="page-header flex-between">
+      <div>
+        <h1>Patient directory</h1>
+        <p>Browse every registered patient, their details, and visit history.</p>
+      </div>
+      <div style="flex:1;min-width:200px;display:flex;gap:0.5rem;">
+        <input id="search-box" placeholder="Search by name, mobile, or Patient ID…" style="flex:1;" />
+        <div id="scan-btn-container"></div>
+      </div>
+    </div>
+
+    <div class="card flush">
+      <div id="patient-table-wrap"><div class="empty-state">Loading patients…</div></div>
+    </div>
+  </main>
+</div>
+
+<!-- Patient detail modal -->
+<div id="detail-modal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(28,36,34,0.55);z-index:100;align-items:center;justify-content:center;overflow:auto;padding:1.5rem;">
+  <div class="card" style="max-width:600px;width:100%;">
+    <div class="flex-between">
+      <h2 id="detail-name">—</h2>
+      <span class="token-tag" id="detail-code">—</span>
+    </div>
+    <p class="small muted" id="detail-meta">—</p>
+
+    <div id="edit-form" style="display:none;margin-top:0.75rem;">
+      <div class="field-row">
+        <div class="field"><label for="edit-name">Full name</label><input id="edit-name" /></div>
+        <div class="field"><label for="edit-mobile">Mobile</label><input id="edit-mobile" /></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label for="edit-age">Age</label><input id="edit-age" type="number" min="0" /></div>
+        <div class="field">
+          <label for="edit-gender">Gender</label> <select id="edit-gender"><option>Male</option><option>Female</option><option>Other</option></select>
+        </div>
+      </div>
+      <div class="field"><label for="edit-address">Address</label><input id="edit-address" /></div>
+      <div class="flex-between">
+        <button class="btn btn-sm btn-outline" id="edit-cancel-btn">Cancel</button>
+        <button class="btn btn-sm btn-primary" id="edit-save-btn">Save changes</button>
+      </div>
+    </div>
+
+    <div class="flex-between" style="margin-top:0.75rem;">
+      <button class="btn btn-sm btn-outline" id="print-card-btn">Print patient card</button>
+      <button class="btn btn-sm btn-outline" id="edit-toggle-btn">Edit details</button>
+      <button class="btn btn-sm btn-danger" id="delete-patient-btn">Delete patient</button>
+    </div>
+
+    <hr class="section-divider" />
+    <h3>Visit history</h3>
+    <div id="detail-history"></div>
+    <div class="flex-between" style="margin-top:1rem;">
+      <button class="btn btn-outline" id="detail-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import {
+  auth, authReady, db, onAuthStateChanged, signOut,
+  collection, getDocs, getDoc, doc, query, where, orderBy, updateDoc, deleteDoc
+} from "./js/firebase-config.js";
+import { applyClinicBranding, fmtDate } from "./js/queue-logic.js";
+import { attachThemeToggle } from "./js/theme.js";
+attachThemeToggle();
+import { attachScanButton } from "./js/barcode-scanner.js";
+
+document.getElementById("scan-btn-container").appendChild(attachScanButton(document.getElementById("search-box")));
+
+applyClinicBranding();
+await authReady;
+
+let allPatients = [];
+let currentRole = null;
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { window.location.href = "index.html"; return; }
+  document.getElementById("user-email").textContent = user.email;
+  const userSnap = await getDoc(doc(db, "users", user.uid));
+  currentRole = userSnap.exists() ? userSnap.data().role : null;
+  adjustNavForRole();
+  await loadPatients();
+});
+document.getElementById("logout-btn").onclick = () => signOut(auth).then(() => window.location.href = "index.html");
+
+function adjustNavForRole() {
+  const nav = document.getElementById("nav-links");
+  if (currentRole === "doctor") {
+    nav.innerHTML = `<a href="doctor.html">My Queue</a><a href="patients.html" class="active">Patients</a><a href="billing.html">Billing</a><a href="board.html">Queue Board</a>`;
+  } else if (currentRole === "admin") {
+    nav.innerHTML = `<a href="admin.html">Admin Setup</a>
+      <a href="backup.html">Backup</a><a href="reception.html">Reception</a><a href="patients.html" class="active">Patients</a><a href="billing.html">Billing</a><a href="board.html">Queue Board</a>`;
+  } else if (currentRole === "reception") {
+    nav.innerHTML = `<a href="reception.html">Reception</a><a href="patients.html" class="active">Patients</a><a href="billing.html">Billing</a><a href="board.html">Queue Board</a><a href="admin.html">Admin Setup</a>`;
+  }
+}
+
+async function loadPatients() {
+  const snap = await getDocs(collection(db, "patients"));
+  allPatients = [];
+  snap.forEach((d) => allPatients.push({ id: d.id, ...d.data() }));
+  // Newest first where we have a registration timestamp; legacy/no-timestamp records sort last.
+  allPatients.sort((a, b) => new Date(b.registeredAt || 0) - new Date(a.registeredAt || 0));
+  renderTable(visiblePatients());
+}
+
+function visiblePatients() {
+  // Soft-deleted patients are hidden from the directory by default, but their
+  // data and visit history are preserved — see openDetail's "Delete patient" flow.
+  return allPatients.filter((p) => !p.deletedAt);
+}
+
+function renderTable(list) {
+  const wrap = document.getElementById("patient-table-wrap");
+  if (list.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">No patients registered yet.</div>';
+    return;
+  }
+  // Card-per-patient layout — works on all screen sizes without horizontal scroll
+  wrap.innerHTML = '<div class="patient-list">' + list.map((p) => `
+    <div class="patient-row">
+      <div class="patient-main">
+        <div class="patient-name">${escapeHtml(p.name)}</div>
+        <div class="patient-meta">
+          ${p.patientCode ? `<span class="mono-tag">${p.patientCode}</span>` : ""}
+          ${p.age ? `${p.age}/${p.gender || "—"}` : ""}
+          ${p.mobile ? ` · ${escapeHtml(p.mobile)}` : ""}
+        </div>
+        <div class="patient-meta">
+          ${p.address ? escapeHtml(p.address) + " · " : ""}
+          ${fmtDate(p.registeredAt)}
+          ${p.registrationSource === "self-service" ? " · Self-service" : ""}
+        </div>
+      </div>
+      <button class="btn btn-sm btn-outline" data-view="${p.id}" style="flex-shrink:0;">View</button>
+    </div>`).join("") + '</div>';
+  wrap.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => openDetail(b.dataset.view)));
+}
+
+function sourceLabel(s) {
+  return { reception: "Reception", kiosk_qr_self_service: "Self-service" }[s] || "—";
+}
+
+document.getElementById("search-box").addEventListener("input", (e) => {
+  const term = e.target.value.trim().toLowerCase();
+  if (!term) { renderTable(visiblePatients()); return; }
+  const filtered = visiblePatients().filter((p) => {
+    const hay = `${p.name || ""} ${p.mobile || ""} ${p.patientCode || ""}`.toLowerCase();
+    return hay.includes(term);
+  });
+  renderTable(filtered);
+});
+
+let activeDetailPatientId = null;
+
+async function openDetail(patientId) {
+  const p = allPatients.find((x) => x.id === patientId);
+  if (!p) return;
+  activeDetailPatientId = patientId;
+  exitEditMode(); // always reopen in view mode, not mid-edit from a previous patient
+  document.getElementById("detail-name").textContent = p.name;
+  document.getElementById("detail-code").textContent = p.patientCode || "—";
+  document.getElementById("detail-meta").textContent = `${p.age || "—"} years · ${p.gender || "—"} · ${p.mobile || "—"} · ${p.address || "No address on file"} · Registered ${fmtDate(p.registeredAt)}`;
+
+  document.getElementById("edit-name").value = p.name || "";
+  document.getElementById("edit-mobile").value = p.mobile || "";
+  document.getElementById("edit-age").value = p.age || "";
+  document.getElementById("edit-gender").value = p.gender || "Male";
+  document.getElementById("edit-address").value = p.address || "";
+
+  const histBox = document.getElementById("detail-history");
+  histBox.innerHTML = "<p class='small muted'>Loading visit history…</p>";
+
+  const visitsSnap = await getDocs(query(collection(db, "visits"), where("patientId", "==", patientId)));
+  const visits = [];
+  visitsSnap.forEach((d) => visits.push({ id: d.id, ...d.data() }));
+  visits.sort((a, b) => new Date(b.issuedAt || 0) - new Date(a.issuedAt || 0));
+
+  if (visits.length === 0) {
+    histBox.innerHTML = '<p class="small muted">No visits recorded yet.</p>';
+  } else {
+    histBox.innerHTML = visits.map((v) => {
+      // Normalise prescriptions — handles new array and legacy single-image field
+      const imgs = v.prescriptions && Array.isArray(v.prescriptions) && v.prescriptions.length > 0
+        ? v.prescriptions
+        : (v.prescription?.dataUrl ? [{ id: "legacy", pageNumber: 1, ...v.prescription }] : []);
+
+      const rxSection = imgs.length > 0
+        ? `<div style="margin-top:0.5rem;">
+             <p class="small" style="margin:0 0 0.4rem;font-weight:600;color:var(--teal-900);">
+               📋 ${imgs.length} prescription page(s)
+             </p>
+             <div style="display:flex;flex-wrap:wrap;gap:0.5rem;">
+               ${imgs.map((img, i) => `
+                 <div style="position:relative;width:90px;">
+                   <img src="${img.dataUrl}" alt="p.${img.pageNumber || i + 1}"
+                     style="width:90px;height:68px;object-fit:cover;border-radius:5px;border:1px solid var(--line);display:block;cursor:pointer;"
+                     onclick="this.parentElement.querySelector('.rx-lb').style.display='flex'" loading="lazy" />
+                   <span style="position:absolute;top:2px;left:3px;background:rgba(0,0,0,0.6);color:white;font-size:0.58rem;padding:1px 4px;border-radius:2px;">
+                     p.${img.pageNumber || i + 1}
+                   </span>
+                   <div class="rx-lb" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(0,0,0,0.92);z-index:400;flex-direction:column;">
+                     <div style="display:flex;justify-content:flex-end;padding:0.6rem 0.75rem;flex-shrink:0;">
+                       <button onclick="this.closest('.rx-lb').style.display='none'"
+                         style="background:rgba(255,255,255,0.15);border:none;color:white;font-size:1.4rem;line-height:1;width:2.2rem;height:2.2rem;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;"
+                         aria-label="Close image preview">✕</button>
+                     </div>
+                     <div style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:0 1rem 1rem;">
+                       <img src="${img.dataUrl}" alt="Prescription page ${img.pageNumber || i + 1}"
+                         style="max-width:100%;border-radius:8px;touch-action:pan-x pan-y;display:block;" />
+                     </div>
+                   </div>
+                 </div>`).join("")}
+             </div>
+           </div>`
+        : "";
+
+      return `
+        <div style="padding:0.6rem 0;border-bottom:1px solid var(--paper-dim);">
+          <div class="flex-between">
+            <span><span class="token-tag" style="font-size:0.85rem;padding:0.2rem 0.5rem;">#${v.tokenNumber}</span> <span class="small muted" style="margin-left:0.5rem;">${fmtDate(v.visitDate)}</span></span>
+            <span class="badge badge-${v.status}">${v.status.replace("_"," ")}</span>
+          </div>
+          ${v.doctorNotes ? `<p class="small" style="margin-top:0.4rem;">${escapeHtml(v.doctorNotes)}</p>` : ""}
+          ${v.vitals ? `<p class="small muted">Wt ${v.vitals.weight || "—"}kg · Temp ${v.vitals.temperature || "—"}°F · BP ${v.vitals.bpSystolic || "—"}/${v.vitals.bpDiastolic || "—"}</p>` : ""}
+          ${v.fees ? `<p class="small muted">Fee collected: ₹${v.fees.total} (${v.fees.mode})</p>` : ""}
+          ${rxSection}
+        </div>`;
+    }).join("");
+  }
+  document.getElementById("detail-modal").style.display = "flex";
+}
+document.getElementById("detail-close").onclick = () => document.getElementById("detail-modal").style.display = "none";
+
+function enterEditMode() {
+  document.getElementById("edit-form").style.display = "block";
+  document.getElementById("edit-toggle-btn").style.display = "none";
+}
+function exitEditMode() {
+  document.getElementById("edit-form").style.display = "none";
+  document.getElementById("edit-toggle-btn").style.display = "inline-flex";
+}
+
+document.getElementById("edit-toggle-btn").onclick = enterEditMode;
+document.getElementById("edit-cancel-btn").onclick = exitEditMode;
+document.getElementById("print-card-btn").onclick = () => {
+  window.open(`patient-card.html?id=${encodeURIComponent(activeDetailPatientId)}`, "_blank");
+};
+
+document.getElementById("edit-save-btn").onclick = async () => {
+  const updated = {
+    name: document.getElementById("edit-name").value.trim(),
+    mobile: document.getElementById("edit-mobile").value.trim(),
+    age: Number(document.getElementById("edit-age").value) || null,
+    gender: document.getElementById("edit-gender").value,
+    address: document.getElementById("edit-address").value.trim(),
+  };
+  if (!updated.name || !updated.mobile) {
+    alert("Name and mobile number are required.");
+    return;
+  }
+  await updateDoc(doc(db, "patients", activeDetailPatientId), updated);
+  // Reflect the edit in the local cache immediately so the table/modal update without a full reload.
+  const idx = allPatients.findIndex((p) => p.id === activeDetailPatientId);
+  if (idx !== -1) allPatients[idx] = { ...allPatients[idx], ...updated };
+  exitEditMode();
+  await openDetail(activeDetailPatientId);
+  renderTable(visiblePatients());
+  alert("Patient details updated.");
+};
+
+document.getElementById("delete-patient-btn").onclick = async () => {
+  const p = allPatients.find((x) => x.id === activeDetailPatientId);
+  if (!p) return;
+
+  const choice = prompt(
+    `Delete ${p.name}?\n\nType "hide" to soft-delete — this removes them from the directory but keeps all visit and billing history intact (recommended, reversible by an admin directly in Firestore).\n\nType "delete" to permanently remove this patient record. Their past visits and bills will remain in reports but will no longer be linked to a live patient profile. This cannot be undone.\n\nType anything else to cancel.`
+  );
+
+  if (choice === "hide") {
+    await updateDoc(doc(db, "patients", activeDetailPatientId), { deletedAt: new Date().toISOString() });
+    const idx = allPatients.findIndex((x) => x.id === activeDetailPatientId);
+    if (idx !== -1) allPatients[idx].deletedAt = new Date().toISOString();
+    document.getElementById("detail-modal").style.display = "none";
+    renderTable(visiblePatients());
+    alert("Patient hidden from the directory. Their visit history is preserved.");
+  } else if (choice === "delete") {
+    if (!confirm(`This permanently deletes ${p.name}'s patient record and cannot be undone. Continue?`)) return;
+    await deleteDoc(doc(db, "patients", activeDetailPatientId));
+    allPatients = allPatients.filter((x) => x.id !== activeDetailPatientId);
+    document.getElementById("detail-modal").style.display = "none";
+    renderTable(visiblePatients());
+    alert("Patient record permanently deleted.");
+  }
+  // Any other input (including empty/cancel) does nothing.
+};
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+</script>
+<script>if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(()=>{});}</script>
+</body>
+</html>

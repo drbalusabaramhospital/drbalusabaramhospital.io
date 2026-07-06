@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Clinic Queue" />
+<link rel="apple-touch-icon" href="assets/icon-192.png" />
+<title>Queue Board — Clinic</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" type="image/svg+xml" href="assets/icon.svg" />
+<link rel="stylesheet" href="css/styles.css" />
+<link rel="stylesheet" href="css/board.css" />
+</head>
+<body class="board-body">
+
+  <div class="board-header">
+    <div class="brand"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" width="28" height="28" aria-hidden="true" style="flex-shrink:0;border-radius:6px;">
+  <rect width="72" height="72" rx="16" fill="white"/>
+  <text x="36" y="37" text-anchor="middle" font-size="28" font-weight="800" fill="#0F4C4F"
+    font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif">Q</text>
+  <polyline points="8,56 15,56 19,48 23,64 27,44 31,60 35,56 64,56"
+    fill="none" stroke="#E8A23D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg> <span data-clinic-name data-clinic-name-suffix=" Board">Clinic Queue Board</span></div>
+    <div class="board-clock">
+      <div class="time" id="clock-time">--:--</div>
+      <div class="date" id="clock-date">—</div>
+    </div>
+    <a href="self-service.html" id="board-book-btn"
+      style="display:none;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.3);color:white;border-radius:8px;padding:0.4rem 0.85rem;font-size:0.82rem;text-decoration:none;white-space:nowrap;">
+      + Book token
+    </a>
+  </div>
+
+  <div class="board-self-service">
+    <div id="qr-box" class="qr-box"></div>
+    <div class="copy">
+      <strong>New here? Scan to book your token</strong>
+      <span>Self-service registration opens on your phone — no app needed.</span>
+    </div>
+  </div>
+
+  <div class="board-legend">
+    <span class="vitals-dot">●</span> Vitals recorded
+  </div>
+
+  <div id="voice-bar" style="display:none;margin:0 1.5rem 0.75rem;padding:0.5rem 0.9rem;border-radius:8px;display:flex;align-items:center;gap:0.75rem;font-size:0.82rem;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);">
+    <span id="voice-bar-icon" style="font-size:1.1rem;">🔇</span>
+    <span id="voice-bar-label" style="color:rgba(255,255,255,0.65);flex:1;">Voice announcements: loading…</span>
+    <button id="voice-test-btn" style="display:none;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:white;border-radius:6px;padding:0.25rem 0.6rem;font-size:0.78rem;cursor:pointer;" title="Play a test announcement to verify the speaker is working">
+      ▶ Test
+    </button>
+  </div>
+
+  <div class="room-grid" id="room-grid"></div>
+
+<script type="module">
+import { db, collection, onSnapshot, query, where, orderBy, doc, getDoc } from "./js/firebase-config.js";
+import { computeACT, calculateETAs, formatETA, todayKey, STATUS_LABELS, applyClinicBranding } from "./js/queue-logic.js";
+import { generateQR } from "./js/qrcode-lib.js";
+
+applyClinicBranding();
+
+function tickClock() {
+  const now = new Date();
+  document.getElementById("clock-time").textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  document.getElementById("clock-date").textContent = now.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" });
+}
+tickClock();
+setInterval(tickClock, 1000 * 15);
+// Re-render every 30s so slot alert colours (urgent/due) update as time passes
+setInterval(render, 1000 * 30);
+
+// Show "Book token" button only on mobile — wall display doesn't need it
+if (window.innerWidth < 768) {
+  document.getElementById("board-book-btn").style.display = "inline-block";
+}
+
+// The QR code is generated live in the browser using our own verified QR encoder
+// (js/qrcode-lib.js), pointed at a configurable URL rather than a baked static
+// image. This means: (a) it self-corrects if you ever change the deployed URL
+// (configure it once in Admin Setup, no need to regenerate an image file), and
+// (b) it's no longer tied to one specific hardcoded GitHub Pages URL.
+//
+// Fallback order: explicit clinicSettings.selfServiceUrl (if an admin has set
+// one) -> the current page's own location (works correctly out of the box for
+// almost every deployment, since self-service.html normally lives alongside
+// board.html) -> if even that fails, show a clear error rather than a blank box.
+async function renderSelfServiceQr() {
+  const qrBox = document.getElementById("qr-box");
+  let url;
+  try {
+    const snap = await getDoc(doc(db, "clinicSettings", "main"));
+    url = snap.exists() && snap.data().selfServiceUrl ? snap.data().selfServiceUrl : null;
+  } catch (err) {
+    console.error("Could not load configured self-service URL, falling back to current page location.", err);
+  }
+  if (!url) {
+    url = new URL("self-service.html", window.location.href).toString();
+  }
+  qrBox.title = url;
+  try {
+    const { matrix, size } = generateQR(url, { errorCorrectionLevel: "M" });
+    const quietZone = 2;
+    const total = size + quietZone * 2;
+    let path = "";
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        if (matrix[r][c] === 1) path += `M${c + quietZone},${r + quietZone}h1v1h-1z `;
+      }
+    }
+    qrBox.innerHTML = `<svg viewBox="0 0 ${total} ${total}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" style="width:100%;height:100%;"><rect width="${total}" height="${total}" fill="#ffffff"/><path d="${path}" fill="#0F4C4F"/></svg>`;
+  } catch (err) {
+    console.error("QR generation failed:", err);
+    qrBox.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:0.55rem;font-weight:700;color:#0F4C4F;text-align:center;">QR error — see console</div>';
+  }
+}
+renderSelfServiceQr();
+
+let doctors = [];
+let visitsToday = [];
+let actCache = {};
+
+onSnapshot(collection(db, "doctors"), async (snap) => {
+  doctors = [];
+  snap.forEach((d) => doctors.push({ id: d.id, ...d.data() }));
+  for (const d of doctors) actCache[d.id] = await computeACT(d.id);
+  render();
+});
+
+onSnapshot(query(collection(db, "visits"), where("visitDate", "==", todayKey()), orderBy("tokenNumber")), (snap) => {
+  visitsToday = [];
+  snap.forEach((d) => visitsToday.push({ id: d.id, ...d.data() }));
+  render();
+});
+
+let lastServingByDoctor = {};
+
+// ---- Voice announcement engine ----
+let announceSettings = {
+  enabled: false,
+  languages: [{ lang: "en-IN", template: "Token number {token}, please proceed to {room}, Doctor {doctor}", enabled: true }],
+  repeat: 2,
+  repeatInterval: 0,   // seconds; 0 = no auto-repeat
+};
+
+// Timers tracking auto-repeat for each doctor (keyed by doctorId)
+const repeatTimers = {};
+
+(async () => {
+  try {
+    const snap = await getDoc(doc(db, "clinicSettings", "main"));
+    if (snap.exists()) {
+      const d = snap.data();
+      if (d.announceEnabled !== undefined) announceSettings.enabled = !!d.announceEnabled;
+      if (d.announceLanguages && Array.isArray(d.announceLanguages)) announceSettings.languages = d.announceLanguages;
+      else if (d.announceLang) announceSettings.languages = [{ lang: d.announceLang, template: d.announceTemplate || "Token number {token}, please proceed to {room}, Doctor {doctor}", enabled: true }];
+      if (d.announceRepeat) announceSettings.repeat = Number(d.announceRepeat);
+      if (d.announceRepeatInterval !== undefined) announceSettings.repeatInterval = Number(d.announceRepeatInterval);
+    }
+  } catch (e) { /* use defaults */ }
+
+  // Update the voice status bar
+  const bar = document.getElementById("voice-bar");
+  const icon = document.getElementById("voice-bar-icon");
+  const label = document.getElementById("voice-bar-label");
+  const testBtn = document.getElementById("voice-test-btn");
+  bar.style.display = "flex";
+
+  if (!window.speechSynthesis) {
+    icon.textContent = "🚫";
+    label.textContent = "Voice announcements: not supported in this browser";
+    return;
+  }
+
+  if (announceSettings.enabled) {
+    const enabledLangs = announceSettings.languages.filter(l => l.enabled);
+    const langNames = { "en-IN":"English","en-US":"English (US)","ta-IN":"Tamil","hi-IN":"Hindi",
+      "ml-IN":"Malayalam","te-IN":"Telugu","kn-IN":"Kannada","mr-IN":"Marathi",
+      "bn-IN":"Bengali","gu-IN":"Gujarati","pa-IN":"Punjabi","or-IN":"Odia","ur-PK":"Urdu" };
+    const repeatInfo = announceSettings.repeatInterval > 0
+      ? `, repeats every ${announceSettings.repeatInterval}s if unanswered`
+      : "";
+    icon.textContent = "🔊";
+    label.innerHTML = `<strong style="color:rgba(255,255,255,0.9);">Voice ON</strong> <span style="color:rgba(255,255,255,0.55);">· ${announceSettings.repeat}× per call${repeatInfo} · checking voices…</span>`;
+    testBtn.style.display = "inline-block";
+    testBtn.addEventListener("click", () => announceToken("1", "Room 1", "the Doctor"));
+
+    // Check which languages have real installed voices — update the bar after loading
+    checkVoiceAvailability(enabledLangs).then((availability) => {
+      const parts = enabledLangs.map(l => {
+        const name = langNames[l.lang] || l.lang;
+        const voice = availability[l.lang];
+        if (voice) {
+          return `<span style="color:rgba(255,255,255,0.85);" title="Voice: ${voice.name}">✓ ${name}</span>`;
+        } else {
+          return `<span style="color:#FBBF24;" title="No ${name} voice found on this device — will use device default (English). Install a ${name} TTS voice in device settings to fix this.">⚠ ${name}</span>`;
+        }
+      });
+      label.innerHTML = `<strong style="color:rgba(255,255,255,0.9);">Voice ON</strong> <span style="color:rgba(255,255,255,0.45);">·</span> ${parts.join(' <span style="color:rgba(255,255,255,0.3);">+</span> ')} <span style="color:rgba(255,255,255,0.45);">· ${announceSettings.repeat}× per call${repeatInfo}</span>`;
+    });
+  } else {
+    icon.textContent = "🔇";
+    label.innerHTML = `<span style="color:rgba(255,255,255,0.45);">Voice announcements: <strong>Off</strong> — enable in Admin Setup → Voice announcements</span>`;
+    testBtn.style.display = "none";
+  }
+})();
+
+function buildAnnouncement(token, room, doctorName, template) {
+  return template
+    .replace(/\{token\}/g, token)
+    .replace(/\{room\}/g, room || "the consultation room")
+    .replace(/\{doctor\}/g, doctorName || "the doctor");
+}
+
+// ---- Voice engine ----
+// Voices are loaded EAGERLY at page load, not lazily inside speakSequence.
+// This is critical: browsers require speechSynthesis.speak() to be called
+// synchronously within the same call stack as a user gesture. Any await —
+// even a resolved one — breaks that chain and silently blocks speech.
+let _voices = [];
+
+function loadVoicesEager() {
+  if (!window.speechSynthesis) return;
+  const vv = window.speechSynthesis.getVoices();
+  if (vv.length > 0) { _voices = vv; return; }
+  // Chrome fires voiceschanged asynchronously on first load
+  window.speechSynthesis.addEventListener("voiceschanged", () => {
+    _voices = window.speechSynthesis.getVoices();
+  });
+  // Safety fallback
+  setTimeout(() => { if (!_voices.length) _voices = window.speechSynthesis.getVoices(); }, 3000);
+}
+loadVoicesEager();
+
+function findVoice(lang, voices) {
+  if (!voices || voices.length === 0) return null;
+  const exact = voices.find(v => v.lang === lang);
+  if (exact) return exact;
+  const prefix = lang.split("-")[0].toLowerCase();
+  return voices.find(v => v.lang.toLowerCase().startsWith(prefix)) || null;
+}
+
+async function checkVoiceAvailability(languages) {
+  // Give voices up to 1s to load if they haven't yet
+  if (!_voices.length) {
+    await new Promise(r => setTimeout(r, 1000));
+    _voices = window.speechSynthesis.getVoices();
+  }
+  const result = {};
+  for (const l of languages) result[l.lang] = findVoice(l.lang, _voices);
+  return result;
+}
+
+// Speak a sequence — fully synchronous after voices are pre-loaded.
+// Never awaits anything, preserving the user gesture call chain.
+function speakSequence(phrases, times = 1) {
+  if (!window.speechSynthesis || phrases.length === 0) return;
+  window.speechSynthesis.cancel();
+
+  let phraseIdx = 0;
+  let repeatCount = 0;
+  let advanceTimer = null;
+
+  function sayNext() {
+    clearTimeout(advanceTimer);
+    if (phraseIdx >= phrases.length) {
+      phraseIdx = 0;
+      repeatCount++;
+      if (repeatCount < times) setTimeout(sayNext, 1200);
+      return;
+    }
+    const { text, lang } = phrases[phraseIdx];
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = lang;
+    u.rate = 0.88;
+    const voice = findVoice(lang, _voices);
+    if (voice) u.voice = voice;
+
+    // Advance to next phrase — called by onend OR by timeout fallback.
+    // onend is unreliable on iOS Safari and some Android browsers; without
+    // the timeout the second language never plays.
+    function advance() {
+      clearTimeout(advanceTimer);
+      phraseIdx++;
+      setTimeout(sayNext, 600);
+    }
+
+    u.onend = advance;
+    u.onerror = advance; // also advance on error so the sequence doesn't stall
+
+    // Fallback timeout: estimate duration from text length at ~140 words/min
+    // rate 0.88 → ~123 words/min → ~500ms per word → use characters/5 as word estimate
+    const estimatedMs = Math.max(2000, (text.length / 5) * (60000 / 123));
+    advanceTimer = setTimeout(advance, estimatedMs + 1500); // +1.5s buffer
+
+    window.speechSynthesis.speak(u);
+  }
+  sayNext();
+}
+
+function announceToken(token, room, doctorName) {
+  if (!announceSettings.enabled) return;
+  const phrases = announceSettings.languages
+    .filter(l => l.enabled)
+    .map(l => ({ text: buildAnnouncement(token, room, doctorName, l.template), lang: l.lang }));
+  speakSequence(phrases, announceSettings.repeat);
+}
+
+function startRepeatTimer(doctorId, token, room, doctorName) {
+  clearRepeatTimer(doctorId);
+  if (!announceSettings.enabled || announceSettings.repeatInterval <= 0) return;
+  repeatTimers[doctorId] = setInterval(() => {
+    // Only repeat if the token is still in "called" status — check lastServingByDoctor
+    // The token id hasn't changed (still the same serving token) so we re-announce
+    announceToken(token, room, doctorName);
+  }, announceSettings.repeatInterval * 1000);
+}
+
+function clearRepeatTimer(doctorId) {
+  if (repeatTimers[doctorId]) {
+    clearInterval(repeatTimers[doctorId]);
+    delete repeatTimers[doctorId];
+  }
+}
+
+function render() {
+  const grid = document.getElementById("room-grid");
+  if (doctors.length === 0) {
+    grid.innerHTML = '<p class="queue-empty">No doctors configured yet.</p>';
+    return;
+  }
+
+  grid.innerHTML = doctors.filter((d) => d.status !== "inactive").map((d) => {
+    const onBreak = d.onBreakUntil && d.onBreakUntil > Date.now();
+    const mine = visitsToday.filter((v) => v.doctorId === d.id || (v.preferredDoctorIds || []).includes(d.id));
+    const active = mine.filter((v) => ["waiting","called","in_consultation"].includes(v.status));
+    const serving = active.find((v) => v.doctorId === d.id && (v.status === "called" || v.status === "in_consultation"));
+    const waiting = active.filter((v) => v.status === "waiting").sort((a,b) => (a.queueSequence ?? a.tokenNumber) - (b.queueSequence ?? b.tokenNumber));
+
+    const act = actCache[d.id] || (d.seedActMinutes || 8) * 60;
+    const etas = calculateETAs(
+      waiting.map(v => ({...v})),
+      act,
+      onBreak ? d.onBreakUntil : null
+    );
+
+    const statusClass = onBreak ? "on_break" : (serving ? "in_session" : "available");
+    const statusLabel = onBreak ? "On break" : (serving ? "In session" : "Available");
+
+    const isNewServing = serving && lastServingByDoctor[d.id] !== serving.id;
+    if (isNewServing) {
+      announceToken(serving.tokenNumber, d.room, d.name);
+      startRepeatTimer(d.id, serving.tokenNumber, d.room, d.name);
+    }
+    // If no longer serving (patient started/completed), clear the repeat timer
+    if (!serving || serving.status !== "called") {
+      clearRepeatTimer(d.id);
+    }
+    lastServingByDoctor[d.id] = serving ? serving.id : null;
+
+    return `
+      <div class="room-card status-${statusClass}">
+        <div class="room-top">
+          <div>
+            <div class="doctor-name">${escapeHtml(d.name)}</div>
+            <div class="doctor-spec">${escapeHtml(d.specialization || "")} · ${escapeHtml(d.room || "")}</div>
+          </div>
+          <span class="room-status-pill ${statusClass}">${statusLabel}</span>
+        </div>
+
+        ${serving ? `
+          <div class="now-serving-box ${isNewServing ? "board-token-anim" : ""}">
+            <div class="label">Now serving</div>
+            <div class="tok-big">#${serving.tokenNumber}</div>
+            <div class="patient-name">${escapeHtml(firstNameOnly(serving.patientName))}</div>
+            <button class="repeat-announce-btn"
+              data-token="${serving.tokenNumber}"
+              data-room="${escapeHtml(d.room || "")}"
+              data-doctor="${escapeHtml(d.name)}"
+              title="Repeat announcement">🔁</button>
+          </div>
+        ` : `<div class="now-serving-box empty">${onBreak ? "☕ On a short break" : "No patient called yet"}</div>`}
+
+        <div class="token-grid-label">${waiting.length > 0 ? "Waiting" : ""}</div>
+        <div class="token-grid">
+          ${waiting.slice(0, 8).map((v, idx) => {
+            const isSlot = !!v.slotTime;
+            const slotMs = isSlot ? new Date(v.slotTime).getTime() : null;
+            const now = Date.now();
+            const slotDue    = isSlot && now >= slotMs;
+            const slotUrgent = isSlot && now >= slotMs - 5 * 60 * 1000;
+            const slotClass  = slotDue ? "slot-due" : slotUrgent ? "slot-urgent" : isSlot ? "slot-booked" : "";
+            return `
+            <div class="token-box ${idx === 0 && !isSlot ? "next-up" : ""} ${v.vitals ? "vitals-done" : ""} ${slotClass}">
+              <div class="token-box-num">
+                #${v.tokenNumber}
+                ${isSlot ? `<span style="font-size:0.55rem;vertical-align:middle;">${slotDue ? "🔔" : "🕐"}</span>` : ""}
+                ${v.vitals ? ' <span class="vitals-dot" title="Vitals recorded">●</span>' : ""}
+              </div>
+              <div class="token-box-eta">
+                ${isSlot ? formatETA(slotMs) : (idx === 0 ? "NEXT · " : "") + formatETA(etas[v.id])}
+              </div>
+            </div>`;
+          }).join("") || '<div class="queue-empty">Queue is empty.</div>'}
+        </div>
+
+        ${waiting.length > 8 ? `<div class="queue-empty">+ ${waiting.length - 8} more waiting</div>` : ""}
+      </div>`;
+  }).join("");
+
+  // Wire repeat-announce buttons via event delegation after innerHTML is set
+  document.getElementById("room-grid").querySelectorAll(".repeat-announce-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      announceToken(btn.dataset.token, btn.dataset.room, btn.dataset.doctor);
+    });
+  });
+}
+
+function firstNameOnly(fullName) {
+  // Privacy: the public board shows only a first name + initial, not the full name.
+  if (!fullName) return "";
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} ${parts[1][0]}.`;
+}
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+</script>
+<script>if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(()=>{});}</script>
+</body>
+</html>

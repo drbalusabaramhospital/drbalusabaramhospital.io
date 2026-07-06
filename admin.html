@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Clinic Queue" />
+<link rel="apple-touch-icon" href="assets/icon-192.png" />
+<title>Admin Setup — Clinic Queue</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" type="image/svg+xml" href="assets/icon.svg" />
+<link rel="stylesheet" href="css/styles.css" />
+
+<script>
+// Backup reminder banner — checks localStorage and injects a banner if overdue
+(function() {
+  const days = Number(localStorage.getItem("clinic-queue-backup-reminder-days") || 0);
+  if (days === 0) return;
+  const last = localStorage.getItem("clinic-queue-last-backup");
+  const overdue = !last || (Date.now() - new Date(last).getTime()) > days * 86400000;
+  if (!overdue) return;
+  document.addEventListener("DOMContentLoaded", function() {
+    const header = document.querySelector(".app-shell > header");
+    if (!header) return;
+    const banner = document.createElement("div");
+    banner.className = "backup-reminder-banner";
+    const daysAgo = last ? Math.floor((Date.now()-new Date(last).getTime())/86400000) : null;
+    banner.innerHTML = `<span>⚠</span>
+      <span>${daysAgo !== null ? `Backup overdue — last backup was ${daysAgo} day(s) ago.` : "No backup recorded yet."} <a href="backup.html">Back up now →</a></span>
+      <button onclick="this.parentElement.remove()" title="Dismiss">✕</button>`;
+    header.after(banner);
+  });
+})();
+</script>
+<script>
+  const t = localStorage.getItem("clinic-queue-theme") || "light";
+  document.addEventListener("DOMContentLoaded", () => {
+    if (t === "dark")     document.body.classList.add("theme-dark");
+    if (t === "midnight") document.body.classList.add("theme-midnight");
+    if (t === "forest")   document.body.classList.add("theme-forest");
+    if (t === "sunset")   document.body.classList.add("theme-sunset");
+  });
+</script>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="brand"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" width="28" height="28" aria-hidden="true" style="flex-shrink:0;border-radius:6px;">
+  <rect width="72" height="72" rx="16" fill="white"/>
+  <text x="36" y="37" text-anchor="middle" font-size="28" font-weight="800" fill="#0F4C4F"
+    font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif">Q</text>
+  <polyline points="8,56 15,56 19,48 23,64 27,44 31,60 35,56 64,56"
+    fill="none" stroke="#E8A23D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg> <span data-clinic-name>Clinic Queue</span></div>
+    <nav>
+      <a href="admin.html" class="active">Admin Setup</a>
+      <a href="backup.html">Backup</a>
+      <a href="reception.html">Reception</a>
+      <a href="patients.html">Patients</a>
+      <a href="billing.html">Billing</a>
+      <a href="board.html">Queue Board</a>
+    </nav>
+    <div class="user-pill"><span id="user-email">—</span><button id="logout-btn">Sign out</button></div>
+    <button id="theme-toggle-btn" title="Switch theme" style="background:none;border:none;cursor:pointer;font-size:1.1rem;padding:0.2rem 0.4rem;opacity:0.8;" aria-label="Switch theme">🎨</button>
+  </header>
+
+  <main class="page">
+    <div class="page-header">
+      <h1>Clinic setup</h1>
+      <p>Configure doctors, consultation rooms, and fees. This drives availability and ETA calculations everywhere else in the app.</p>
+    </div>
+
+    <div class="card" style="margin-bottom:1.5rem;">
+      <h2>Clinic branding</h2>
+      <p class="helper">This name appears in the banner across every screen — Reception, Doctor, the Queue Board, and the self-service booking page.</p>
+      <form id="branding-form">
+        <div class="field-row" style="align-items:flex-end;">
+          <div class="field" style="flex:2;margin-bottom:0;">
+            <label for="clinic-name-input">Clinic name</label>
+            <input id="clinic-name-input" placeholder="e.g. Sunrise Family Clinic" required />
+          </div>
+          <button class="btn btn-primary" type="submit">Save</button>
+        </div>
+        <hr class="section-divider" />
+        <div class="field">
+          <label for="self-service-url-input">Self-service booking URL (used to generate the QR code on the Queue Board)</label>
+          <input id="self-service-url-input" placeholder="https://yourname.github.io/your-repo/self-service.html" />
+          <p class="helper">Leave blank to auto-use this device's current page location.</p>
+        </div>
+        <hr class="section-divider" />
+        <p class="small muted" style="margin-bottom:0.75rem;">UPI payment details — shown as a scannable QR code when a patient pays by UPI in the billing modal.</p>
+        <div class="field-row">
+          <div class="field">
+            <label for="upi-vpa-input">UPI ID (VPA)</label>
+            <input id="upi-vpa-input" placeholder="clinic@upi or 9876543210@paytm" />
+          </div>
+          <div class="field">
+            <label for="upi-name-input">Merchant name</label>
+            <input id="upi-name-input" placeholder="Sunrise Clinic" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="upi-code-input">Merchant code (optional — your bank/PSP's merchant category code, if any)</label>
+          <input id="upi-code-input" placeholder="Leave blank if not applicable" />
+        </div>
+        <hr class="section-divider" />
+        <p class="small muted" style="margin-bottom:0.75rem;">Prescription image settings — images are compressed in the browser before saving to the database. Lower quality and smaller resolution reduce storage size significantly.</p>
+        <div class="field-row">
+          <div class="field">
+            <label for="rx-quality-input">JPEG compression quality</label>
+            <select id="rx-quality-input">
+              <option value="0.8">High (80%) — larger file, clearer text</option>
+              <option value="0.6" selected>Medium (60%) — recommended</option>
+              <option value="0.4">Low (40%) — smallest file</option>
+              <option value="0.25">Very low (25%) — poorest quality</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="rx-maxpx-input">Max resolution (longest side)</label>
+            <select id="rx-maxpx-input">
+              <option value="1600">1600 px — high detail</option>
+              <option value="1200" selected>1200 px — recommended</option>
+              <option value="800">800 px — compact</option>
+              <option value="600">600 px — minimum</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="visit-history-count-input">Past visits shown in consultation modal</label>
+            <select id="visit-history-count-input">
+              <option value="1">1 visit</option>
+              <option value="2">2 visits</option>
+              <option value="3" selected>3 visits (default)</option>
+              <option value="5">5 visits</option>
+              <option value="10">10 visits</option>
+              <option value="0">All visits</option>
+            </select>
+          </div>
+        </div>
+        </div>
+      </form>
+    </div>
+
+    <div class="card" style="margin-bottom:1.5rem;">
+      <h2>🔊 Voice announcements</h2>
+      <p class="helper" style="margin-bottom:1rem;">Spoken aloud on the Queue Board screen when a token is called. Uses the device's built-in text-to-speech engine — no internet required. Configure languages and templates below, then open the Board screen to verify the speaker is working.</p>
+      <div class="helper" style="margin-bottom:1rem;background:var(--amber-100);border-left:3px solid var(--amber-500);padding:0.5rem 0.75rem;border-radius:0 6px 6px 0;">
+        <strong>Important:</strong> each language requires a TTS (text-to-speech) voice to be installed on the device running the Board screen. If a language shows ⚠ on the Board, install that language's TTS voice in the device's <em>Settings → Accessibility → Text-to-speech</em> (Android) or <em>Settings → General → Accessibility → Spoken Content</em> (iOS/iPad).
+      </div>
+
+      <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.9rem;">
+        <label class="toggle-wrap" for="announce-enabled-input">
+          <input type="checkbox" id="announce-enabled-input" />
+          <span class="toggle-track"></span>
+          <span class="toggle-label">Enable voice announcements</span>
+          <span class="toggle-state" id="announce-enabled-state">Off</span>
+        </label>
+      </div>
+
+      <div id="announce-config" style="display:none;">
+        <div class="field-row" style="margin-bottom:0.75rem;">
+          <div class="field">
+            <label for="announce-repeat-input">Repeat count per call</label>
+            <select id="announce-repeat-input">
+              <option value="1">Once</option>
+              <option value="2">Twice</option>
+              <option value="3">Three times</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="announce-interval-input">Auto-repeat if still called</label>
+            <select id="announce-interval-input">
+              <option value="0">Disabled — announce once only</option>
+              <option value="30">Every 30 seconds</option>
+              <option value="60">Every 60 seconds</option>
+              <option value="90">Every 90 seconds</option>
+              <option value="120">Every 2 minutes</option>
+              <option value="180">Every 3 minutes</option>
+            </select>
+          </div>
+        </div>
+
+        <label style="margin-bottom:0.4rem;display:block;">Languages &amp; templates — use ↑↓ to reorder, check to enable</label>
+        <p class="helper" style="margin-bottom:0.6rem;">Variables: <code>{token}</code> = token number &nbsp; <code>{room}</code> = room &nbsp; <code>{doctor}</code> = doctor name. Languages play in order when a token is called.</p>
+        <div id="lang-list" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
+        <button type="button" class="btn btn-sm btn-outline" id="add-lang-btn" style="margin-top:0.5rem;">+ Add language</button>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2 id="doctor-form-title">Add a doctor</h2>
+        <form id="doctor-form">
+          <input type="hidden" id="doc-edit-id" value="" />
+          <div class="field">
+            <label for="doc-name">Full name</label>
+            <input id="doc-name" placeholder="Dr. Anjali Sharma" required />
+          </div>
+          <div class="field">
+            <label for="doc-spec">Specialization</label>
+            <input id="doc-spec" placeholder="General Physician" />
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="doc-fee">Consultation fee (₹)</label>
+              <input id="doc-fee" type="number" min="0" placeholder="500" required />
+            </div>
+            <div class="field">
+              <label for="doc-act">Seed avg. consult time (min)</label>
+              <input id="doc-act" type="number" min="1" placeholder="8" required />
+            </div>
+          </div>
+          <div class="field">
+            <label for="doc-room">Default room</label>
+            <input id="doc-room" placeholder="Room 1" required />
+          </div>
+          <div style="display:flex;gap:0.5rem;">
+            <button class="btn btn-primary" type="submit" id="doc-submit-btn" style="flex:1;">Add doctor</button>
+            <button class="btn btn-outline" type="button" id="doc-cancel-btn" style="display:none;">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Doctors</h2>
+        <p class="helper">To let a doctor log in, create their account in Firebase Authentication first, then paste their User UID below to link it.</p>
+        <div id="doctor-list"><div class="empty-state">No doctors yet — add one on the left.</div></div>
+      </div>
+    </div>
+
+    <hr class="section-divider" />
+
+    <div class="grid-2">
+      <div class="card">
+        <h2>Link a staff login</h2>
+        <p class="helper">Create the user in Firebase Auth (email/password) first, then map their UID to a role here.</p>
+        <form id="user-form">
+          <div class="field">
+            <label for="user-uid">Firebase Auth UID</label>
+            <input id="user-uid" placeholder="Paste UID from Firebase Console → Authentication → Users" required />
+          </div>
+          <div class="field">
+            <label for="user-name">Display name</label>
+            <input id="user-name" placeholder="Front Desk" required />
+          </div>
+          <div class="field">
+            <label for="user-role">Role</label>
+            <select id="user-role" required>
+              <option value="">Select role</option>
+              <option value="reception">Reception</option>
+              <option value="doctor">Doctor</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <div class="field" id="doctor-link-field" style="display:none;">
+            <label for="user-doctor">Linked doctor</label>
+            <select id="user-doctor"></select>
+          </div>
+          <button class="btn btn-primary btn-block" type="submit">Save login mapping</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Staff logins configured</h2>
+        <div id="user-list"><div class="empty-state">No staff logins linked yet.</div></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script type="module">
+import {
+  auth, authReady, db, onAuthStateChanged, signOut,
+  collection, addDoc, doc, setDoc, updateDoc, getDocs, onSnapshot, query, orderBy, getDoc
+} from "./js/firebase-config.js";
+import { applyClinicBranding, computeACT, formatDuration } from "./js/queue-logic.js";
+import { attachThemeToggle } from "./js/theme.js";
+attachThemeToggle();
+
+applyClinicBranding();
+
+// ---- Voice announcement language management ----
+const ALL_LANGUAGES = [
+  { lang: "en-IN", label: "English (India)" },
+  { lang: "en-US", label: "English (US)" },
+  { lang: "ta-IN", label: "Tamil (தமிழ்)" },
+  { lang: "hi-IN", label: "Hindi (हिंदी)" },
+  { lang: "ml-IN", label: "Malayalam (മലയാളം)" },
+  { lang: "te-IN", label: "Telugu (తెలుగు)" },
+  { lang: "kn-IN", label: "Kannada (ಕನ್ನಡ)" },
+  { lang: "mr-IN", label: "Marathi (मराठी)" },
+  { lang: "bn-IN", label: "Bengali (বাংলা)" },
+  { lang: "gu-IN", label: "Gujarati (ગુજરાતી)" },
+  { lang: "pa-IN", label: "Punjabi (ਪੰਜਾਬੀ)" },
+  { lang: "or-IN", label: "Odia (ଓଡ଼ିଆ)" },
+  { lang: "ur-PK", label: "Urdu (اردو)" },
+];
+
+const DEFAULT_TEMPLATES = {
+  "en-IN": "Token number {token}, please proceed to {room}, Doctor {doctor}",
+  "en-US": "Token number {token}, please proceed to {room}, Doctor {doctor}",
+  "ta-IN": "டோக்கன் எண் {token}, {room} க்கு செல்லவும், மருத்துவர் {doctor}",
+  "hi-IN": "टोकन नंबर {token}, कृपया {room} में जाएं, डॉक्टर {doctor}",
+  "ml-IN": "ടോക്കൺ നമ്പർ {token}, {room} ലേക്ക് വരൂ, ഡോക്ടർ {doctor}",
+  "te-IN": "టోకెన్ నంబర్ {token}, {room} కి రండి, డాక్టర్ {doctor}",
+  "kn-IN": "ಟೋಕನ್ ಸಂಖ್ಯೆ {token}, {room} ಗೆ ಬನ್ನಿ, ಡಾಕ್ಟರ್ {doctor}",
+  "mr-IN": "टोकन क्रमांक {token}, कृपया {room} मध्ये या, डॉक्टर {doctor}",
+  "bn-IN": "টোকেন নম্বর {token}, {room} এ যান, ডাক্তার {doctor}",
+  "gu-IN": "ટોકન નંબર {token}, {room} માં જાઓ, ડૉક્ટર {doctor}",
+  "pa-IN": "ਟੋਕਨ ਨੰਬਰ {token}, {room} ਵਿੱਚ ਜਾਓ, ਡਾਕਟਰ {doctor}",
+  "or-IN": "ଟୋକେନ୍ ନମ୍ବର {token}, {room} ଯାଆ, ଡାକ୍ତର {doctor}",
+  "ur-PK": "ٹوکن نمبر {token}, {room} میں جائیں، ڈاکٹر {doctor}",
+};
+
+function defaultLangList() {
+  return [
+    { lang: "en-IN", template: DEFAULT_TEMPLATES["en-IN"], enabled: true },
+  ];
+}
+
+// Toggle show/hide of voice config section and update state label
+document.getElementById("announce-enabled-input").addEventListener("change", (e) => {
+  document.getElementById("announce-config").style.display = e.target.checked ? "block" : "none";
+  document.getElementById("announce-enabled-state").textContent = e.target.checked ? "On" : "Off";
+});
+
+function renderLangList(entries) {
+  const container = document.getElementById("lang-list");
+  container.innerHTML = "";
+  entries.forEach((entry, idx) => {
+    const langInfo = ALL_LANGUAGES.find((l) => l.lang === entry.lang) || { label: entry.lang };
+    const row = document.createElement("div");
+    row.dataset.lang = entry.lang;
+    row.style.cssText = "display:flex;align-items:flex-start;gap:0.5rem;background:var(--paper-dim);border:1px solid var(--line);border-radius:8px;padding:0.6rem 0.75rem;";
+    row.innerHTML = `
+      <input type="checkbox" class="lang-enabled" ${entry.enabled ? "checked" : ""}
+        style="width:auto;margin:0;margin-top:0.3rem;flex-shrink:0;" />
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:600;font-size:0.88rem;margin-bottom:0.35rem;">${escapeHtml(langInfo.label)}</div>
+        <input class="lang-template" value="${escapeHtml(entry.template || DEFAULT_TEMPLATES[entry.lang] || DEFAULT_TEMPLATES["en-IN"])}"
+          style="font-size:0.85rem;padding:0.3rem 0.5rem;" />
+      </div>
+      <div style="display:flex;flex-direction:column;gap:0.25rem;flex-shrink:0;">
+        <button class="btn btn-sm btn-outline lang-up" title="Move up" ${idx === 0 ? "disabled" : ""}>↑</button>
+        <button class="btn btn-sm btn-outline lang-down" title="Move down" ${idx === entries.length - 1 ? "disabled" : ""}>↓</button>
+        <button class="btn btn-sm btn-danger lang-remove" title="Remove">✕</button>
+      </div>`;
+    row.querySelector(".lang-up").addEventListener("click", () => {
+      const prev = row.previousElementSibling;
+      if (prev) container.insertBefore(row, prev);
+      // Refresh disabled states on all up/down buttons
+      refreshLangListButtons();
+    });
+    row.querySelector(".lang-down").addEventListener("click", () => {
+      const next = row.nextElementSibling;
+      if (next) container.insertBefore(next, row);
+      refreshLangListButtons();
+    });
+    row.querySelector(".lang-remove").addEventListener("click", () => {
+      row.remove();
+      refreshLangListButtons();
+    });
+    container.appendChild(row);
+  });
+}
+
+function readLangList() {
+  return Array.from(document.getElementById("lang-list").children).map((row) => ({
+    lang: row.dataset.lang,
+    template: row.querySelector(".lang-template").value.trim() || DEFAULT_TEMPLATES[row.dataset.lang] || DEFAULT_TEMPLATES["en-IN"],
+    enabled: row.querySelector(".lang-enabled").checked,
+  }));
+}
+
+function refreshLangListButtons() {
+  const rows = Array.from(document.getElementById("lang-list").children);
+  rows.forEach((row, i) => {
+    row.querySelector(".lang-up").disabled = (i === 0);
+    row.querySelector(".lang-down").disabled = (i === rows.length - 1);
+  });
+}
+
+// Add language button
+document.getElementById("add-lang-btn").addEventListener("click", () => {
+  const existing = new Set(readLangList().map((e) => e.lang));
+  const available = ALL_LANGUAGES.filter((l) => !existing.has(l.lang));
+  if (available.length === 0) { alert("All available languages are already added."); return; }
+  const options = available.map((l, i) => `${i + 1}. ${l.label}`).join("\n");
+  const choice = prompt(`Choose a language to add:\n${options}\n\nType the number:`);
+  if (!choice) return;
+  const idx = parseInt(choice) - 1;
+  if (isNaN(idx) || idx < 0 || idx >= available.length) return;
+  const picked = available[idx];
+  const current = readLangList();
+  current.push({ lang: picked.lang, template: DEFAULT_TEMPLATES[picked.lang] || DEFAULT_TEMPLATES["en-IN"], enabled: true });
+  renderLangList(current);
+});
+
+// Seed the list with a default on first load if nothing exists yet
+renderLangList(defaultLangList());
+await authReady;
+
+// Pre-fill the branding form with the currently configured values, if any.
+(async () => {
+  const snap = await getDoc(doc(db, "clinicSettings", "main"));
+  if (snap.exists()) {
+    const d = snap.data();
+    if (d.name) document.getElementById("clinic-name-input").value = d.name;
+    if (d.selfServiceUrl) document.getElementById("self-service-url-input").value = d.selfServiceUrl;
+    if (d.upiVpa) document.getElementById("upi-vpa-input").value = d.upiVpa;
+    if (d.upiMerchantName) document.getElementById("upi-name-input").value = d.upiMerchantName;
+    if (d.upiMerchantCode) document.getElementById("upi-code-input").value = d.upiMerchantCode;
+    if (d.prescriptionQuality) document.getElementById("rx-quality-input").value = d.prescriptionQuality;
+    if (d.prescriptionMaxPx) document.getElementById("rx-maxpx-input").value = d.prescriptionMaxPx;
+    if (d.visitHistoryCount !== undefined) document.getElementById("visit-history-count-input").value = d.visitHistoryCount;
+    // Voice settings
+    document.getElementById("announce-enabled-input").checked = !!d.announceEnabled;
+    document.getElementById("announce-enabled-state").textContent = d.announceEnabled ? "On" : "Off";
+    document.getElementById("announce-config").style.display = d.announceEnabled ? "block" : "none";
+    if (d.announceRepeat) document.getElementById("announce-repeat-input").value = d.announceRepeat;
+    if (d.announceRepeatInterval !== undefined) document.getElementById("announce-interval-input").value = d.announceRepeatInterval;
+    if (d.announceLanguages && Array.isArray(d.announceLanguages)) {
+      renderLangList(d.announceLanguages);
+    } else if (d.announceLang) {
+      // Migrate legacy single-language setting
+      renderLangList([{ lang: d.announceLang, template: d.announceTemplate || DEFAULT_TEMPLATES[d.announceLang] || DEFAULT_TEMPLATES["en-IN"], enabled: true }]);
+    } else {
+      renderLangList(defaultLangList());
+    }
+  }
+})();
+
+document.getElementById("branding-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = document.getElementById("clinic-name-input").value.trim();
+  const selfServiceUrl = document.getElementById("self-service-url-input").value.trim();
+  const upiVpa = document.getElementById("upi-vpa-input").value.trim();
+  const upiMerchantName = document.getElementById("upi-name-input").value.trim();
+  const upiMerchantCode = document.getElementById("upi-code-input").value.trim();
+  const prescriptionQuality = Number(document.getElementById("rx-quality-input").value);
+  const prescriptionMaxPx = Number(document.getElementById("rx-maxpx-input").value);
+  const visitHistoryCount = Number(document.getElementById("visit-history-count-input").value);
+  const announceEnabled = document.getElementById("announce-enabled-input").checked;
+  const announceRepeat = Number(document.getElementById("announce-repeat-input").value) || 2;
+  const announceRepeatInterval = Number(document.getElementById("announce-interval-input").value) || 0;
+  const announceLanguages = readLangList();
+  if (!name) return;
+  await setDoc(doc(db, "clinicSettings", "main"), {
+    name,
+    selfServiceUrl: selfServiceUrl || null,
+    upiVpa: upiVpa || null,
+    upiMerchantName: upiMerchantName || null,
+    upiMerchantCode: upiMerchantCode || null,
+    prescriptionQuality,
+    prescriptionMaxPx,
+    visitHistoryCount,
+    announceEnabled,
+    announceRepeat,
+    announceRepeatInterval,
+    announceLanguages,
+    updatedAt: new Date().toISOString()
+  });
+  await applyClinicBranding(); // refresh this page's own banner immediately
+  alert("Saved. The new name will appear on every screen the next time it loads.");
+});
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { window.location.href = "index.html"; return; }
+  document.getElementById("user-email").textContent = user.email;
+});
+document.getElementById("logout-btn").onclick = () => signOut(auth).then(() => window.location.href = "index.html");
+
+const doctorsRef = collection(db, "doctors");
+const usersRef = collection(db, "users");
+
+let doctorsCache = [];
+
+onSnapshot(query(doctorsRef, orderBy("name")), (snap) => {
+  doctorsCache = [];
+  const list = document.getElementById("doctor-list");
+  const doctorSelect = document.getElementById("user-doctor");
+  if (snap.empty) {
+    list.innerHTML = '<div class="empty-state">No doctors yet — add one on the left.</div>';
+    doctorSelect.innerHTML = "";
+    return;
+  }
+  let html = "";
+  doctorSelect.innerHTML = "";
+  snap.forEach((d) => {
+    const doc_ = { id: d.id, ...d.data() };
+    doctorsCache.push(doc_);
+    const isActive = doc_.status !== "inactive";
+    html += `
+      <div class="flex-between" style="padding:0.75rem 0;border-bottom:1px solid var(--paper-dim);gap:0.5rem;flex-wrap:wrap;${isActive ? "" : "opacity:0.55;"}">
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+            <strong>${escapeHtml(doc_.name)}</strong>
+            <span class="badge ${isActive ? "badge-waiting" : "badge-cancelled"}" style="font-size:0.7rem;">${isActive ? "Active" : "Inactive"}</span>
+          </div>
+          <div class="small muted" style="margin-top:0.2rem;">${escapeHtml(doc_.specialization || "")} · ${doc_.room || "no room"} · ₹${doc_.consultationFee}</div>
+          <div class="small" style="margin-top:0.35rem;display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+            <span>Configured: <strong>${doc_.seedActMinutes}m</strong></span>
+            <span class="muted">|</span>
+            <span>System avg: <strong id="act-val-${doc_.id}" style="color:var(--ink-soft);">…</strong></span>
+            <button class="btn btn-sm btn-outline" id="act-use-${doc_.id}"
+              style="display:none;padding:0.15rem 0.45rem;font-size:0.72rem;"
+              data-docid="${doc_.id}" data-docname="${escapeHtml(doc_.name)}"
+              title="Pre-fill the seed ACT input with the system-calculated value">Use this ↓</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:0.4rem;flex-shrink:0;">
+          <button class="btn btn-sm btn-outline" data-edit-doctor="${doc_.id}" title="Edit doctor details">✏️ Edit</button>
+          <button class="btn btn-sm btn-outline" data-toggle-doctor="${doc_.id}" data-current-status="${doc_.status || "active"}">
+            ${isActive ? "Set inactive" : "Set active"}
+          </button>
+        </div>
+      </div>`;
+    const opt = document.createElement("option");
+    opt.value = doc_.id;
+    opt.textContent = doc_.name;
+    doctorSelect.appendChild(opt);
+  });
+  list.innerHTML = html;
+
+  list.querySelectorAll("[data-toggle-doctor]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const docId = btn.dataset.toggleDoctor;
+      const current = btn.dataset.currentStatus || "active";
+      const next = current === "active" ? "inactive" : "active";
+      btn.textContent = "Saving…"; btn.disabled = true;
+      await updateDoc(doc(db, "doctors", docId), { status: next });
+    });
+  });
+
+  list.querySelectorAll("[data-edit-doctor]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const docId = btn.dataset.editDoctor;
+      const doctor = doctorsCache.find(d => d.id === docId);
+      if (!doctor) return;
+      // Pre-fill the form
+      document.getElementById("doc-edit-id").value = docId;
+      document.getElementById("doc-name").value = doctor.name || "";
+      document.getElementById("doc-spec").value = doctor.specialization || "";
+      document.getElementById("doc-fee").value = doctor.consultationFee || "";
+      document.getElementById("doc-act").value = doctor.seedActMinutes || "";
+      document.getElementById("doc-room").value = doctor.room || "";
+      // Switch form to edit mode
+      document.getElementById("doctor-form-title").textContent = `Edit — ${doctor.name}`;
+      document.getElementById("doc-submit-btn").textContent = "Save changes";
+      document.getElementById("doc-cancel-btn").style.display = "inline-flex";
+      // Scroll the form into view
+      document.getElementById("doctor-form").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+
+  // Wire "Use this ↓" buttons — pre-fill the Add Doctor form's seed ACT input
+  // so the admin can easily apply the system-calculated value
+  list.querySelectorAll("[data-docid]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const calcMins = Number(btn.dataset.calcMins);
+      if (!calcMins) return;
+      document.getElementById("doc-act").value = calcMins;
+      // Scroll the Add Doctor form into view so admin sees what was filled
+      document.getElementById("doc-act").scrollIntoView({ behavior: "smooth", block: "center" });
+      document.getElementById("doc-act").focus();
+      // Show a hint
+      document.getElementById("doc-act").title = `Pre-filled from system average for ${btn.dataset.docname}. Edit as needed then save.`;
+    });
+  });
+
+  // Async: compute ACT for each doctor and fill in the placeholder values
+  doctorsCache.forEach(async (doc_) => {
+    const valEl = document.getElementById(`act-val-${doc_.id}`);
+    const useBtn = document.getElementById(`act-use-${doc_.id}`);
+    if (!valEl) return;
+    try {
+      const actSecs = await computeACT(doc_.id);
+      const actMins = Math.round(actSecs / 60);
+      const seedSecs = doc_.seedActMinutes * 60;
+      const deviation = Math.abs(actSecs - seedSecs) / seedSecs;
+      const usingCalculated = deviation > 0.30;
+
+      if (usingCalculated) {
+        // System is using the calculated value — show it prominently with deviation
+        valEl.textContent = `${actMins}m`;
+        valEl.style.color = "var(--teal-900)";
+        valEl.title = `System is using this calculated average (${(deviation*100).toFixed(0)}% different from configured ${doc_.seedActMinutes}m)`;
+        // Show "Use this" button so admin can update the configuration
+        if (useBtn) {
+          useBtn.style.display = "inline-flex";
+          useBtn.dataset.calcMins = actMins;
+          useBtn.textContent = `Use ${actMins}m ↓`;
+        }
+      } else {
+        // System is using seed — show calculated for reference but dimmed
+        valEl.textContent = `${actMins}m`;
+        valEl.style.color = "var(--ink-soft)";
+        valEl.title = `Within ±30% of configured ${doc_.seedActMinutes}m — system is using configured value`;
+      }
+    } catch (err) {
+      valEl.textContent = "—";
+      valEl.title = "Could not compute";
+    }
+  });
+});
+
+function resetDoctorForm() {
+  document.getElementById("doc-edit-id").value = "";
+  document.getElementById("doctor-form").reset();
+  document.getElementById("doctor-form-title").textContent = "Add a doctor";
+  document.getElementById("doc-submit-btn").textContent = "Add doctor";
+  document.getElementById("doc-cancel-btn").style.display = "none";
+}
+
+document.getElementById("doc-cancel-btn").addEventListener("click", resetDoctorForm);
+
+document.getElementById("doctor-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const editId = document.getElementById("doc-edit-id").value.trim();
+  const name = document.getElementById("doc-name").value.trim();
+  const specialization = document.getElementById("doc-spec").value.trim();
+  const consultationFee = Number(document.getElementById("doc-fee").value);
+  const seedActMinutes = Number(document.getElementById("doc-act").value);
+  const room = document.getElementById("doc-room").value.trim();
+  const btn = document.getElementById("doc-submit-btn");
+  btn.textContent = "Saving…"; btn.disabled = true;
+  try {
+    if (editId) {
+      // Edit mode — update existing doctor document
+      await updateDoc(doc(db, "doctors", editId), {
+        name, specialization, consultationFee, seedActMinutes, room,
+        updatedAt: new Date().toISOString()
+      });
+    } else {
+      // Add mode — create new doctor document
+      await addDoc(doctorsRef, {
+        name, specialization, consultationFee, seedActMinutes, room,
+        status: "active", createdAt: new Date().toISOString()
+      });
+    }
+    resetDoctorForm();
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("user-role").addEventListener("change", (e) => {
+  document.getElementById("doctor-link-field").style.display = e.target.value === "doctor" ? "block" : "none";
+});
+
+onSnapshot(usersRef, (snap) => {
+  const list = document.getElementById("user-list");
+  if (snap.empty) {
+    list.innerHTML = '<div class="empty-state">No staff logins linked yet.</div>';
+    return;
+  }
+  let html = "";
+  snap.forEach((d) => {
+    const u = d.data();
+    html += `
+      <div class="flex-between" style="padding:0.6rem 0;border-bottom:1px solid var(--paper-dim);">
+        <div><strong>${escapeHtml(u.displayName)}</strong><br/><span class="small muted">${u.role}${u.doctorId ? " · linked to doctor" : ""}</span></div>
+        <span class="badge badge-waiting">${u.role}</span>
+      </div>`;
+  });
+  list.innerHTML = html;
+});
+
+document.getElementById("user-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const uid = document.getElementById("user-uid").value.trim();
+  const displayName = document.getElementById("user-name").value.trim();
+  const role = document.getElementById("user-role").value;
+  const doctorId = role === "doctor" ? document.getElementById("user-doctor").value : null;
+  await setDoc(doc(db, "users", uid), { displayName, role, doctorId, createdAt: new Date().toISOString() });
+  e.target.reset();
+  document.getElementById("doctor-link-field").style.display = "none";
+  alert("Saved. That user can now sign in and will land on the right screen for their role.");
+});
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+</script>
+<script>if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(()=>{});}</script>
+</body>
+</html>
