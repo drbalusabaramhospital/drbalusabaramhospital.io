@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Clinic Queue" />
+<link rel="apple-touch-icon" href="assets/icon-192.png" />
+<title>Sign in — Clinic Queue</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" type="image/svg+xml" href="assets/icon.svg" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="brand"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" width="40" height="40" aria-hidden="true" style="flex-shrink:0;border-radius:9px;">
+  <rect width="72" height="72" rx="16" fill="#0F4C4F"/>
+  <text x="36" y="37" text-anchor="middle" font-size="28" font-weight="800" fill="white"
+    font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif">Q</text>
+  <polyline points="8,56 15,56 19,48 23,64 27,44 31,60 35,56 64,56"
+    fill="none" stroke="#E8A23D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg> <span data-clinic-name>Clinic Queue</span></div>
+      <p class="sub">Sign in to manage the patient queue.</p>
+      <form id="login-form">
+        <div class="field">
+          <label for="email">Staff login</label>
+          <input id="email" type="email" placeholder="reception@clinic.local" required autocomplete="username" />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" type="password" required autocomplete="current-password" />
+        </div>
+        <button class="btn btn-primary btn-block" type="submit">Sign in</button>
+        <p class="error-msg" id="error-msg" style="display:none;"></p>
+      </form>
+      <hr class="section-divider" />
+      <p class="small muted">Looking for the waiting-room display? <a href="board.html">Open the queue board</a> — no login needed.</p>
+      <p class="small muted">Walk-in patient? <a href="self-service.html">Book a token here</a>.</p>
+    </div>
+  </div>
+
+  <script type="module">
+    import { auth, authReady, signInWithEmailAndPassword, onAuthStateChanged, db, doc, getDoc } from "./js/firebase-config.js";
+    import { applyClinicBranding } from "./js/queue-logic.js";
+
+    applyClinicBranding();
+    await authReady;
+
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const role = await resolveRole(user.uid);
+        redirectForRole(role);
+      }
+    });
+
+    async function resolveRole(uid) {
+      const snap = await getDoc(doc(db, "users", uid));
+      return snap.exists() ? snap.data().role : null;
+    }
+
+    function redirectForRole(role) {
+      if (role === "doctor") window.location.href = "doctor.html";
+      else if (role === "admin") window.location.href = "admin.html";
+      else window.location.href = "reception.html";
+    }
+
+    const form = document.getElementById("login-form");
+    const errorMsg = document.getElementById("error-msg");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorMsg.style.display = "none";
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+      try {
+        const cred = await signInWithEmailAndPassword(auth, email, password);
+        const role = await resolveRole(cred.user.uid);
+        if (!role) {
+          errorMsg.textContent = "No role assigned to this account yet. Ask an admin to set one up in the 'users' collection.";
+          errorMsg.style.display = "block";
+          return;
+        }
+        redirectForRole(role);
+      } catch (err) {
+        errorMsg.textContent = "Sign-in failed. Check the email/password and try again.";
+        errorMsg.style.display = "block";
+      }
+    });
+  </script>
+<script>if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(()=>{});}</script>
+</body>
+</html>
