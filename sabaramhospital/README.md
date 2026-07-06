@@ -1,6 +1,6 @@
 # Clinic Queue Manager — Prototype
 
-A working prototype of the multi-doctor patient queue system: token issuance with multi-doctor preference, real-time ETA calculation, a public animated queue board, doctor consultation workflow with patient history, self-service QR booking, and per-visit billing.
+A working prototype of the  multi-doctor patient queue system: token issuance with multi-doctor preference, real-time ETA calculation, a public animated queue board, doctor consultation workflow with patient history, self-service QR booking, and per-visit billing.
 
 This is a **functional proof-of-concept**, not a production-hardened system. See "Known limitations" before using it with real patients.
 
