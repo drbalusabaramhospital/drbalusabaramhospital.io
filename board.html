@@ -123,18 +123,23 @@ let doctors = [];
 let visitsToday = [];
 let actCache = {};
 
-onSnapshot(collection(db, "doctors"), async (snap) => {
-  doctors = [];
-  snap.forEach((d) => doctors.push({ id: d.id, ...d.data() }));
-  for (const d of doctors) actCache[d.id] = await computeACT(d.id);
-  render();
-});
+// Queue listeners are started only after announceSettings are loaded from
+// Firestore, so the first announcement always uses the saved templates and
+// not the hardcoded defaults.
+function startQueueListeners() {
+  onSnapshot(collection(db, "doctors"), async (snap) => {
+    doctors = [];
+    snap.forEach((d) => doctors.push({ id: d.id, ...d.data() }));
+    for (const d of doctors) actCache[d.id] = await computeACT(d.id);
+    render();
+  });
 
-onSnapshot(query(collection(db, "visits"), where("visitDate", "==", todayKey()), orderBy("tokenNumber")), (snap) => {
-  visitsToday = [];
-  snap.forEach((d) => visitsToday.push({ id: d.id, ...d.data() }));
-  render();
-});
+  onSnapshot(query(collection(db, "visits"), where("visitDate", "==", todayKey()), orderBy("tokenNumber")), (snap) => {
+    visitsToday = [];
+    snap.forEach((d) => visitsToday.push({ id: d.id, ...d.data() }));
+    render();
+  });
+}
 
 let lastServingByDoctor = {};
 
@@ -206,6 +211,10 @@ const repeatTimers = {};
     label.innerHTML = `<span style="color:rgba(255,255,255,0.45);">Voice announcements: <strong>Off</strong> — enable in Admin Setup → Voice announcements</span>`;
     testBtn.style.display = "none";
   }
+
+  // Start queue listeners NOW — after announceSettings are populated from
+  // Firestore, so the first token call uses the correct saved templates.
+  startQueueListeners();
 })();
 
 function buildAnnouncement(token, room, doctorName, template) {
