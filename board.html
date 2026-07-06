@@ -318,6 +318,9 @@ function announceToken(token, room, doctorName) {
   const phrases = announceSettings.languages
     .filter(l => l.enabled)
     .map(l => ({ text: buildAnnouncement(token, room, doctorName, l.template), lang: l.lang }));
+  console.log("[Voice] announceToken called:", { token, room, doctorName });
+  console.log("[Voice] templates in use:", announceSettings.languages.map(l => ({ lang: l.lang, enabled: l.enabled, template: l.template })));
+  console.log("[Voice] phrases to speak:", phrases.map(p => ({ lang: p.lang, text: p.text })));
   speakSequence(phrases, announceSettings.repeat);
 }
 
