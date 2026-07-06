@@ -346,8 +346,11 @@ function renderLangList(entries) {
       </label>
       <div style="flex:1;min-width:0;">
         <div style="font-weight:700;font-size:0.9rem;margin-bottom:0.35rem;color:${isEnabled ? "var(--teal-600,#0F4C4F)" : "var(--muted)"};">${escapeHtml(langInfo.label)}</div>
-        <input class="lang-template" value="${escapeHtml(entry.template || DEFAULT_TEMPLATES[entry.lang] || DEFAULT_TEMPLATES["en-IN"])}"
-          style="font-size:0.85rem;padding:0.3rem 0.5rem;" />
+        <div style="display:flex;gap:0.4rem;align-items:center;">
+          <input class="lang-template" value="${escapeHtml(entry.template || DEFAULT_TEMPLATES[entry.lang] || DEFAULT_TEMPLATES["en-IN"])}"
+            style="font-size:0.85rem;padding:0.3rem 0.5rem;flex:1;" />
+          <button type="button" class="btn btn-sm btn-outline lang-reset" title="Reset to default template" style="white-space:nowrap;font-size:0.75rem;">↺ Reset</button>
+        </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:0.25rem;flex-shrink:0;">
         <button class="btn btn-sm btn-outline lang-up" title="Move up" ${idx === 0 ? "disabled" : ""}>↑</button>
@@ -365,6 +368,10 @@ function renderLangList(entries) {
       row.querySelector(".lang-toggle-pill").previousElementSibling?.nextElementSibling;
       const label = row.querySelector("div > div:first-child");
       if (label) label.style.color = on ? "var(--teal-600,#0F4C4F)" : "var(--muted)";
+    });
+    row.querySelector(".lang-reset").addEventListener("click", () => {
+      const defaultTpl = DEFAULT_TEMPLATES[entry.lang] || DEFAULT_TEMPLATES["en-IN"];
+      row.querySelector(".lang-template").value = defaultTpl;
     });
     row.querySelector(".lang-up").addEventListener("click", () => {
       const prev = row.previousElementSibling;
