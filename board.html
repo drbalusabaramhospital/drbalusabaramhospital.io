@@ -282,7 +282,9 @@ function speakSequence(phrases, times = 1) {
       return;
     }
     const { text, lang } = phrases[phraseIdx];
-    const u = new SpeechSynthesisUtterance(text);
+    // Prepend non-breaking spaces as a silent filler so TTS engine startup
+    // clipping hits the filler instead of the first real word.
+    const u = new SpeechSynthesisUtterance('    ' + text);
     u.lang = lang;
     u.rate = 0.88;
     const voice = findVoice(lang, _voices);
