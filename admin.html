@@ -184,7 +184,11 @@
         <label style="margin-bottom:0.4rem;display:block;">Languages &amp; templates — use ↑↓ to reorder, check to enable</label>
         <p class="helper" style="margin-bottom:0.6rem;">Variables: <code>{token}</code> = token number &nbsp; <code>{room}</code> = room &nbsp; <code>{doctor}</code> = doctor name. Languages play in order when a token is called.</p>
         <div id="lang-list" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
-        <button type="button" class="btn btn-sm btn-outline" id="add-lang-btn" style="margin-top:0.5rem;">+ Add language</button>
+        <div style="display:flex;gap:0.5rem;margin-top:0.75rem;align-items:center;">
+          <button type="button" class="btn btn-sm btn-outline" id="add-lang-btn">+ Add language</button>
+          <button type="button" class="btn btn-primary btn-sm" id="save-announce-btn">Save voice settings</button>
+          <span id="announce-save-status" style="font-size:0.82rem;color:var(--teal-600);display:none;">✓ Saved</span>
+        </div>
       </div>
     </div>
 
@@ -479,6 +483,23 @@ document.getElementById("branding-form").addEventListener("submit", async (e) =>
   });
   await applyClinicBranding(); // refresh this page's own banner immediately
   alert("Saved. The new name will appear on every screen the next time it loads.");
+});
+
+document.getElementById("save-announce-btn").addEventListener("click", async () => {
+  const announceEnabled = document.getElementById("announce-enabled-input").checked;
+  const announceRepeat = Number(document.getElementById("announce-repeat-input").value) || 2;
+  const announceRepeatInterval = Number(document.getElementById("announce-interval-input").value) || 0;
+  const announceLanguages = readLangList();
+  await setDoc(doc(db, "clinicSettings", "main"), {
+    announceEnabled,
+    announceRepeat,
+    announceRepeatInterval,
+    announceLanguages,
+    updatedAt: new Date().toISOString()
+  }, { merge: true });
+  const status = document.getElementById("announce-save-status");
+  status.style.display = "inline";
+  setTimeout(() => { status.style.display = "none"; }, 2500);
 });
 
 onAuthStateChanged(auth, async (user) => {
