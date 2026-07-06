@@ -280,21 +280,24 @@ function speakSequence(phrases, times = 1) {
     if (voice) u.voice = voice;
 
     // Advance to next phrase — called by onend OR by timeout fallback.
-    // onend is unreliable on iOS Safari and some Android browsers; without
-    // the timeout the second language never plays.
+    // Guard with `advanced` flag so both onend AND timeout firing doesn't
+    // double-increment phraseIdx and skip the second language.
+    let advanced = false;
     function advance() {
+      if (advanced) return;
+      advanced = true;
       clearTimeout(advanceTimer);
       phraseIdx++;
-      setTimeout(sayNext, 600);
+      setTimeout(sayNext, 1000); // 1s pause between languages
     }
 
     u.onend = advance;
     u.onerror = advance; // also advance on error so the sequence doesn't stall
 
-    // Fallback timeout: estimate duration from text length at ~140 words/min
-    // rate 0.88 → ~123 words/min → ~500ms per word → use characters/5 as word estimate
+    // Fallback timeout in case onend never fires (common in Chrome when
+    // the tab is in the background or the voice engine stalls).
     const estimatedMs = Math.max(2000, (text.length / 5) * (60000 / 123));
-    advanceTimer = setTimeout(advance, estimatedMs + 1500); // +1.5s buffer
+    advanceTimer = setTimeout(advance, estimatedMs + 800); // tighter buffer
 
     window.speechSynthesis.speak(u);
   }
