@@ -111,7 +111,8 @@ service cloud.firestore {
     }
     match /visits/{id} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow create: if true;           // self-service kiosk creates visits without login
+      allow update, delete: if request.auth != null;
     }
     match /clinicSettings/{id} {
       allow read: if true;
@@ -119,7 +120,7 @@ service cloud.firestore {
     }
     match /counters/{id} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if true;            // token counter transaction must work from self-service kiosk
     }
     match /patients/{id} {
       allow read, write: if request.auth != null;
@@ -134,7 +135,7 @@ service cloud.firestore {
 }
 ```
 
-> **Note:** `doctors`, `visits`, `clinicSettings`, and `counters` allow public read so the queue board and self-service kiosk work without login. All write operations require authentication.
+> **Note:** `doctors`, `visits`, `clinicSettings`, and `counters` allow public read so the queue board works without login. `visits` also allows public `create` and `counters` allows public `write` so the self-service kiosk can issue tokens without login. Staff operations (update, delete, patient access) always require authentication.
 
 ---
 

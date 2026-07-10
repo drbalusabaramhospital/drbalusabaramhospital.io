@@ -85,9 +85,11 @@ Then open `http://localhost:8080`. Opening HTML files directly via `file://` wil
 
 Rules are in [`firestore.rules`](firestore.rules). Key principle:
 
-- `doctors`, `visits`, `clinicSettings`, `counters` — **public read** (queue board and kiosk need this without login)
+- `doctors`, `visits`, `clinicSettings`, `counters` — **public read** (queue board needs this without login)
+- `visits` — **public create** allowed (self-service kiosk submits token bookings without login)
+- `counters` — **public write** allowed (token-number transaction must run from self-service kiosk)
 - `patients`, `users`, `backups` — **auth required** for all access
-- All **writes** require authentication
+- All **update / delete** operations require authentication
 
 Paste the contents of `firestore.rules` into Firebase Console → Firestore Database → Rules and click **Publish**.
 
