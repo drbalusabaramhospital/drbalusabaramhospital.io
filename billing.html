@@ -304,7 +304,7 @@ async function runReport() {
   }
   if (patientFilter) {
     visits = visits.filter((v) => {
-      const hay = `${v.patientName || ""} ${v.patientCode || ""}`.toLowerCase();
+      const hay = `${v.patientName || ""} ${v.patientCode || ""} ${v.patientMobile || ""}`.toLowerCase();
       return hay.includes(patientFilter);
     });
   }

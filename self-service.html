@@ -81,7 +81,7 @@ const patientsRef = collection(db, "patients");
   const snap = await getDocs(doctorsRef);
   doctors = [];
   snap.forEach((d) => doctors.push({ id: d.id, ...d.data() }));
-  for (const d of doctors) actCache[d.id] = await computeACT(d.id);
+  await Promise.all(doctors.map(async (d) => { actCache[d.id] = await computeACT(d.id); }));
   renderDoctorCheckboxes();
 })();
 
@@ -141,6 +141,9 @@ async function countWaiting(doctorId) {
 document.getElementById("booking-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   if (selectedDoctorIds.size === 0) { alert("Please select at least one doctor."); return; }
+  const submitBtn = e.submitter || document.querySelector("#booking-form [type=submit]");
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Booking…"; }
+  try {
 
   const patientData = {
     name: document.getElementById("name").value.trim(),
@@ -186,15 +189,23 @@ document.getElementById("booking-form").addEventListener("submit", async (e) => 
     fees: null,
   });
 
-  const act = actCache[preferredDoctorIds[0]] || 8 * 60;
-  const waitingCount = await countWaiting(preferredDoctorIds[0]);
-  const etaMs = Date.now() + waitingCount * act * 1000;
+  // Pick the doctor with the shortest queue to show the best-case ETA.
+  // countWaiting is called BEFORE addDoc so the new visit is not counted in its own ETA.
+  const waitCounts = await Promise.all(preferredDoctorIds.map((id) => countWaiting(id)));
+  const bestIdx = waitCounts.indexOf(Math.min(...waitCounts));
+  const bestDoctorId = preferredDoctorIds[bestIdx];
+  const act = actCache[bestDoctorId] || 8 * 60;
+  const etaMs = Date.now() + waitCounts[bestIdx] * act * 1000;
 
   document.getElementById("form-view").style.display = "none";
   document.getElementById("confirm-view").style.display = "block";
   document.getElementById("confirm-token").textContent = `#${tokenNumber}`;
   document.getElementById("confirm-patient-id").textContent = patientCode || "—";
   document.getElementById("confirm-eta").textContent = new Date(etaMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch (err) {
+    alert(`Booking failed. Please try again or ask reception for help.`);
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Book my token"; }
+  }
 });
 
 async function nextTokenNumber() {

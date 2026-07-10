@@ -1,7 +1,7 @@
 // Core business logic: ACT (average consultation time) and ETA calculation,
 // shared by Reception, Doctor, and Queue Board views.
 import {
-  db, collection, query, where, orderBy, getDocs, getDoc, doc, updateDoc, onSnapshot, runTransaction
+  db, collection, query, where, orderBy, limit, getDocs, getDoc, doc, updateDoc, onSnapshot, runTransaction
 } from "./firebase-config.js";
 
 const PATIENT_ID_PREFIX = "CLN";
@@ -60,24 +60,25 @@ const ACT_MAX_SECONDS = 90 * 60;    // 90 min ceiling — beyond this it's almos
 export async function computeACT(doctorId) {
   const visitsRef = collection(db, "visits");
 
-  // Fetch the doctor's configured seed time in parallel with the visits query
+  // Fetch doctor seed and recent completed visits in parallel.
+  // limit(ACT_WINDOW_N) prevents reading hundreds of old visits — we only need the last 25.
   let seedSeconds = DEFAULT_ACT_SECONDS;
+  let snap;
   try {
-    const doctorSnap = await getDoc(doc(db, "doctors", doctorId));
+    const [doctorSnap, visitsSnap] = await Promise.all([
+      getDoc(doc(db, "doctors", doctorId)),
+      getDocs(query(
+        visitsRef,
+        where("doctorId", "==", doctorId),
+        where("status", "==", "completed"),
+        orderBy("consultEndAt", "desc"),
+        limit(ACT_WINDOW_N)
+      )),
+    ]);
     if (doctorSnap.exists() && doctorSnap.data().seedActMinutes) {
       seedSeconds = doctorSnap.data().seedActMinutes * 60;
     }
-  } catch (e) { /* fall through to DEFAULT_ACT_SECONDS */ }
-
-  let snap;
-  try {
-    const q = query(
-      visitsRef,
-      where("doctorId", "==", doctorId),
-      where("status", "==", "completed"),
-      orderBy("consultEndAt", "desc")
-    );
-    snap = await getDocs(q);
+    snap = visitsSnap;
   } catch (err) {
     console.error(`computeACT: query failed for doctor ${doctorId} — likely a missing Firestore index. Check the browser console for a link to create it.`, err);
     return seedSeconds;

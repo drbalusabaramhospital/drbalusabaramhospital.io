@@ -358,14 +358,14 @@ onSnapshot(doctorsRef, async (snap) => {
   doctors = [];
   snap.forEach((d) => doctors.push({ id: d.id, ...d.data() }));
   renderDoctorCheckboxes();
-  for (const doc_ of doctors) {
+  await Promise.all(doctors.map(async (doc_) => {
     try {
       actCache[doc_.id] = await computeACT(doc_.id);
     } catch (err) {
       console.error("computeACT failed for doctor", doc_.id, err);
       actCache[doc_.id] = (doc_.seedActMinutes || 8) * 60;
     }
-  }
+  }));
   // Re-render both tabs when doctors change (name updates etc.)
   if (todayVisits.length) renderVisitRows(todayVisits, "today-tokens", false);
   if (historyVisits.length) renderHistory();
@@ -644,6 +644,9 @@ document.getElementById("delete-patient-only-btn").addEventListener("click", asy
 document.getElementById("patient-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   if (selectedDoctorIds.size === 0) { alert("Select at least one preferred doctor."); return; }
+  const submitBtn = e.submitter || document.querySelector("#patient-form [type=submit]");
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Issuing…"; }
+  try {
 
   const existingId = document.getElementById("patient-id").value;
   const patientData = {
@@ -738,6 +741,11 @@ document.getElementById("patient-form").addEventListener("submit", async (e) => 
   document.getElementById("slot-validation-msg").textContent = "";
   renderDoctorCheckboxes();
   switchTab("today"); // jump to Today tab so the issued token is immediately visible
+  } catch (err) {
+    alert(`Failed to issue token: ${err.message}`);
+  } finally {
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Issue token"; }
+  }
 });
 
 async function nextTokenNumber() {
