@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Public read — queue board (board.html) and self-service kiosk (self-service.html)
+    // must work without any login. Writes always require authentication.
+    match /doctors/{id} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /visits/{id} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /clinicSettings/{id} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /counters/{id} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Staff-only — require login for all operations
+    match /patients/{id} {
+      allow read, write: if request.auth != null;
+    }
+    match /users/{id} {
+      allow read, write: if request.auth != null;
+    }
+    match /backups/{id} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
