@@ -55,7 +55,7 @@
       <div id="confirm-view" style="display:none;text-align:center;">
         <p class="small muted">Your token</p>
         <div class="token-tag" style="font-size:1.8rem;padding:0.6rem 1.2rem;" id="confirm-token">#--</div>
-        <p style="margin-top:0.75rem;" class="small muted">Patient ID: <strong id="confirm-patient-id">—</strong> — keep this for future visits</p>
+        <p style="margin-top:0.75rem;" class="small muted">Mobile: <strong id="confirm-patient-id">—</strong> — mention this at reception for faster check-in</p>
         <p style="margin-top:0.5rem;">Estimated time: <strong id="confirm-eta">--:--</strong></p>
         <p class="helper">Watch the waiting-room display board for your token number, or check back here.</p>
         <a href="board.html" class="btn btn-outline btn-block" style="margin-top:1rem;">View live queue board</a>
@@ -65,7 +65,7 @@
 
 <script type="module">
 import { db, collection, addDoc, getDocs, query, where, doc, runTransaction } from "./js/firebase-config.js";
-import { computeACT, todayKey, generatePatientId, applyClinicBranding } from "./js/queue-logic.js";
+import { computeACT, todayKey, applyClinicBranding } from "./js/queue-logic.js";
 
 applyClinicBranding();
 
@@ -75,7 +75,6 @@ let actCache = {};
 
 const doctorsRef = collection(db, "doctors");
 const visitsRef = collection(db, "visits");
-const patientsRef = collection(db, "patients");
 
 (async function init() {
   const snap = await getDocs(doctorsRef);
@@ -145,41 +144,38 @@ document.getElementById("booking-form").addEventListener("submit", async (e) => 
   if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Booking…"; }
   try {
 
-  const patientData = {
-    name: document.getElementById("name").value.trim(),
-    mobile: document.getElementById("mobile").value.trim(),
-    age: Number(document.getElementById("age").value),
-    gender: document.getElementById("gender").value,
-    address: document.getElementById("address").value.trim(),
-    registrationSource: "kiosk_qr_self_service",
-    registeredAt: new Date().toISOString(),
-  };
-
-  // Try to match an existing patient by mobile number to avoid duplicates.
-  const existingSnap = await getDocs(query(patientsRef, where("mobile", "==", patientData.mobile)));
-  let patientId, patientCode;
-  if (!existingSnap.empty) {
-    patientId = existingSnap.docs[0].id;
-    patientCode = existingSnap.docs[0].data().patientCode || null;
-  } else {
-    patientCode = await generatePatientId();
-    const newDoc = await addDoc(patientsRef, { ...patientData, patientCode });
-    patientId = newDoc.id;
-  }
+  // Self-service runs without a login so we cannot read/write the patients collection
+  // (it is staff-only). All patient details are stored directly on the visit document.
+  // Reception will link or create the patient record when they process the token.
+  const name   = document.getElementById("name").value.trim();
+  const mobile = document.getElementById("mobile").value.trim();
+  const age    = Number(document.getElementById("age").value);
+  const gender = document.getElementById("gender").value;
+  const address = document.getElementById("address").value.trim();
 
   const preferredDoctorIds = Array.from(selectedDoctorIds);
+
+  // Compute ETAs before issuing the token so the new visit is not counted in its own wait.
+  const waitCounts = await Promise.all(preferredDoctorIds.map((id) => countWaiting(id)));
+  const bestIdx   = waitCounts.indexOf(Math.min(...waitCounts));
+  const bestDoctorId = preferredDoctorIds[bestIdx];
+  const act  = actCache[bestDoctorId] || 8 * 60;
+  const etaMs = Date.now() + waitCounts[bestIdx] * act * 1000;
+
   const tokenNumber = await nextTokenNumber();
 
   await addDoc(visitsRef, {
-    patientId,
-    patientCode: patientCode || null,
-    patientName: patientData.name,
-    patientAge: patientData.age,
-    patientGender: patientData.gender,
+    patientId: null,        // reception links to patient record when processing
+    patientCode: null,
+    patientName: name,
+    patientMobile: mobile,
+    patientAge: age,
+    patientGender: gender,
+    patientAddress: address,
     preferredDoctorIds,
     doctorId: null,
     tokenNumber,
-    queueSequence: tokenNumber, // see reception.html for why this is separate from tokenNumber
+    queueSequence: tokenNumber,
     status: "waiting",
     source: "kiosk_qr_self_service",
     visitDate: todayKey(),
@@ -189,18 +185,10 @@ document.getElementById("booking-form").addEventListener("submit", async (e) => 
     fees: null,
   });
 
-  // Pick the doctor with the shortest queue to show the best-case ETA.
-  // countWaiting is called BEFORE addDoc so the new visit is not counted in its own ETA.
-  const waitCounts = await Promise.all(preferredDoctorIds.map((id) => countWaiting(id)));
-  const bestIdx = waitCounts.indexOf(Math.min(...waitCounts));
-  const bestDoctorId = preferredDoctorIds[bestIdx];
-  const act = actCache[bestDoctorId] || 8 * 60;
-  const etaMs = Date.now() + waitCounts[bestIdx] * act * 1000;
-
   document.getElementById("form-view").style.display = "none";
   document.getElementById("confirm-view").style.display = "block";
   document.getElementById("confirm-token").textContent = `#${tokenNumber}`;
-  document.getElementById("confirm-patient-id").textContent = patientCode || "—";
+  document.getElementById("confirm-patient-id").textContent = mobile;
   document.getElementById("confirm-eta").textContent = new Date(etaMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   } catch (err) {
     alert(`Booking failed. Please try again or ask reception for help.`);
