@@ -404,11 +404,11 @@ document.getElementById("consult-complete").onclick = async () => {
 };
 
 async function getLastVisits(patientId, excludeVisitId) {
-  let limit = 3;
+  let displayLimit = 3;
   try {
     const snap = await getDoc(doc(db, "clinicSettings", "main"));
     if (snap.exists() && snap.data().visitHistoryCount !== undefined) {
-      limit = Number(snap.data().visitHistoryCount);
+      displayLimit = Number(snap.data().visitHistoryCount);
     }
   } catch (err) {
     console.warn("Could not read visitHistoryCount, using default of 3:", err);
@@ -417,7 +417,7 @@ async function getLastVisits(patientId, excludeVisitId) {
   // Fetch recent visits for this patient — limit to 3× the display limit so we have enough
   // candidates after filtering by status, without loading every visit ever (avoids downloading
   // all historical prescription base64 data for long-term patients).
-  const fetchLimit = Math.max(limit * 3, 15);
+  const fetchLimit = Math.max(displayLimit * 3, 15);
   const snap = await getDocs(query(collection(db, "visits"), where("patientId", "==", patientId), orderBy("issuedAt", "desc"), limit(fetchLimit)));
   const visits = [];
   snap.forEach((d) => {
@@ -427,7 +427,7 @@ async function getLastVisits(patientId, excludeVisitId) {
     if (v.status === "completed" || hasPrescription) visits.push(v);
   });
   visits.sort((a, b) => new Date(b.consultEndAt || b.issuedAt || 0) - new Date(a.consultEndAt || a.issuedAt || 0));
-  return limit === 0 ? visits : visits.slice(0, limit);
+  return displayLimit === 0 ? visits : visits.slice(0, displayLimit);
 }
 
 function renderHistory(visits) {
