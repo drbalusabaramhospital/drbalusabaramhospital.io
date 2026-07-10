@@ -70,8 +70,14 @@
         <h1 id="doctor-name">My queue</h1>
         <p>Call patients, run consultations, and look up patient history.</p>
       </div>
-      <div>
-        <button class="btn btn-outline" id="break-btn">Take a short break</button>
+      <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+        <div id="break-input-row" style="display:flex;align-items:center;gap:0.4rem;">
+          <input id="break-minutes" type="number" min="1" max="120" value="10" inputmode="numeric"
+            style="width:4.5rem;padding:0.35rem 0.5rem;border:1px solid var(--line);border-radius:6px;font-size:0.95rem;"
+            aria-label="Break duration in minutes" />
+          <span style="font-size:0.85rem;color:var(--ink-soft);">min</span>
+          <button class="btn btn-outline" id="break-btn">Take a break</button>
+        </div>
         <button class="btn btn-outline" id="end-break-btn" style="display:none;">End break</button>
       </div>
     </div>
@@ -191,9 +197,8 @@ onAuthStateChanged(auth, async (user) => {
 
 // ---- Break controls ----
 document.getElementById("break-btn").onclick = async () => {
-  const mins = prompt("Break duration in minutes:", "10");
-  if (!mins) return;
-  doctorOnBreakUntil = Date.now() + Number(mins) * 60 * 1000;
+  const mins = Number(document.getElementById("break-minutes").value) || 10;
+  doctorOnBreakUntil = Date.now() + mins * 60 * 1000;
   await updateDoc(doc(db, "doctors", doctorId), { onBreakUntil: doctorOnBreakUntil });
   document.getElementById("break-btn").style.display = "none";
   document.getElementById("end-break-btn").style.display = "inline-flex";
@@ -381,7 +386,11 @@ async function openConsultModal(visit) {
   document.getElementById("consult-modal").style.display = "flex";
 }
 
-document.getElementById("consult-close").onclick = () => document.getElementById("consult-modal").style.display = "none";
+document.getElementById("consult-close").onclick = () => {
+  const notes = document.getElementById("c-notes").value.trim();
+  if (notes && !confirm("You have unsaved consultation notes. Close without saving?")) return;
+  document.getElementById("consult-modal").style.display = "none";
+};
 document.getElementById("consult-complete").onclick = async () => {
   const visitId = document.getElementById("consult-modal").dataset.visitId;
   const notes = document.getElementById("c-notes").value.trim();
