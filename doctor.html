@@ -122,7 +122,7 @@
 import {
   auth, authReady, db, onAuthStateChanged, signOut,
   collection, doc, updateDoc, getDoc, getDocs, addDoc, onSnapshot,
-  query, where, orderBy
+  query, where, orderBy, limit
 } from "./js/firebase-config.js";
 import { computeACT, calculateETAs, formatETA, todayKey, STATUS_LABELS, NO_SHOW_GRACE_SECONDS, applyClinicBranding, fmtDate, earliestAvailableSlot } from "./js/queue-logic.js";
 import { attachThemeToggle } from "./js/theme.js";
@@ -405,10 +405,11 @@ async function getLastVisits(patientId, excludeVisitId) {
     console.warn("Could not read visitHistoryCount, using default of 3:", err);
   }
 
-  // Fetch all visits for this patient in one query.
-  // Include a visit in the history if: it's completed (has notes/vitals/fees to review)
-  // OR it has a prescription captured (can happen before completion or even on a cancelled visit).
-  const snap = await getDocs(query(collection(db, "visits"), where("patientId", "==", patientId)));
+  // Fetch recent visits for this patient — limit to 3× the display limit so we have enough
+  // candidates after filtering by status, without loading every visit ever (avoids downloading
+  // all historical prescription base64 data for long-term patients).
+  const fetchLimit = Math.max(limit * 3, 15);
+  const snap = await getDocs(query(collection(db, "visits"), where("patientId", "==", patientId), orderBy("issuedAt", "desc"), limit(fetchLimit)));
   const visits = [];
   snap.forEach((d) => {
     if (d.id === excludeVisitId) return;

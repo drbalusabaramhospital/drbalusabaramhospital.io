@@ -306,7 +306,7 @@
 import {
   auth, authReady, db, onAuthStateChanged, signOut,
   collection, addDoc, doc, updateDoc, deleteDoc, getDoc, getDocs, onSnapshot,
-  query, where, orderBy, runTransaction
+  query, where, orderBy, limit, runTransaction
 } from "./js/firebase-config.js";
 import { computeACT, calculateETAs, formatETA, todayKey, STATUS_LABELS, NO_SHOW_GRACE_SECONDS, generatePatientId, applyClinicBranding, fmtDate, earliestAvailableSlot } from "./js/queue-logic.js";
 import { attachScanButton } from "./js/barcode-scanner.js";
@@ -487,16 +487,19 @@ async function updateAvailabilityHelper() {
   warnBox.innerHTML = "";
   if (selectedDoctorIds.size === 0) { helper.textContent = ""; return; }
 
+  // Fetch today's active visits ONCE and count per doctor in JS — avoids N round-trips.
+  const todaySnap = await getDocs(query(visitsRef, where("visitDate", "==", todayKey()), where("status", "in", ["waiting", "called"])));
+  const todayActive = [];
+  todaySnap.forEach((d) => todayActive.push(d.data()));
+
   const lines = [];
   let anyWarning = false;
   for (const id of selectedDoctorIds) {
     const d = doctors.find((x) => x.id === id);
-    const waitingCount = await countWaiting(id);
+    const waitingCount = todayActive.filter((v) => v.doctorId === id || (v.preferredDoctorIds || []).includes(id)).length;
     const act = actCache[id] || d.seedActMinutes * 60;
     const etaMinutes = Math.round((waitingCount * act) / 60);
     lines.push(`${d.name}: ${waitingCount} ahead, ~${etaMinutes} min wait`);
-    // Simple availability check placeholder — full calendar windows can be added later;
-    // for now we warn if estimated wait exceeds a configurable session length proxy (120 min).
     if (etaMinutes > 120) anyWarning = true;
   }
   helper.textContent = lines.join("  ·  ");
@@ -527,14 +530,39 @@ document.getElementById("search-input").addEventListener("input", (e) => {
 });
 
 async function doSearch(term) {
-  const snap = await getDocs(patientsRef);
+  const lc = term.toLowerCase();
+  // Use Firestore prefix queries for name, mobile, and patientCode to avoid full collection scans.
+  // Firestore range queries on a single field at a time; we run three in parallel and deduplicate.
+  const prefixEnd = (s) => s.slice(0, -1) + String.fromCharCode(s.charCodeAt(s.length - 1) + 1);
+  const termUpper = term + ""; // high Unicode suffix works as "starts with" range end
+  const [nameSnap, mobileSnap, codeSnap] = await Promise.all([
+    getDocs(query(patientsRef, where("name", ">=", term), where("name", "<=", termUpper))),
+    getDocs(query(patientsRef, where("mobile", ">=", term), where("mobile", "<=", termUpper))),
+    getDocs(query(patientsRef, where("patientCode", ">=", term.toUpperCase()), where("patientCode", "<=", term.toUpperCase() + ""))),
+  ]);
+  const seen = new Set();
   const results = [];
-  snap.forEach((d) => {
-    const p = { id: d.id, ...d.data() };
-    if (p.deletedAt) return; // hidden via soft-delete — don't surface in active search
-    const hay = `${p.name} ${p.mobile} ${p.id} ${p.patientCode || ""}`.toLowerCase();
-    if (hay.includes(term.toLowerCase())) results.push(p);
-  });
+  for (const snap of [nameSnap, mobileSnap, codeSnap]) {
+    snap.forEach((d) => {
+      if (seen.has(d.id)) return;
+      const p = { id: d.id, ...d.data() };
+      if (p.deletedAt) return;
+      seen.add(d.id);
+      results.push(p);
+    });
+  }
+  // Also apply a loose client-side filter so partial matches in the middle of a name still show.
+  const allSnap = results.length === 0 ? [] : results;
+  // Fallback: if prefix search returned nothing, do a narrower in-memory scan (max 200 docs).
+  if (allSnap.length === 0) {
+    const fallback = await getDocs(query(patientsRef, orderBy("name"), limit(200)));
+    fallback.forEach((d) => {
+      const p = { id: d.id, ...d.data() };
+      if (p.deletedAt) return;
+      const hay = `${p.name} ${p.mobile} ${p.patientCode || ""}`.toLowerCase();
+      if (hay.includes(lc)) results.push(p);
+    });
+  }
   const box = document.getElementById("search-results");
   if (results.length === 0) { box.innerHTML = '<p class="helper">No match — fill the form below to register a new patient.</p>'; return; }
   box.innerHTML = results.slice(0, 5).map((p) => `
@@ -1225,9 +1253,11 @@ document.getElementById("upi-confirm").onclick = async () => {
       alert(`Receipt ${pending.receiptNumber} saved. Total: ₹${pending.total} via UPI.`);
       fetchHistory();
     } else {
-      await saveFeeTransaction("UPI");
+      // Pass the receiptRef generated when the QR was shown so receipt number matches the UPI transaction reference.
+      const receiptRef = el("upi-modal").dataset.receipt;
+      const { total } = await saveFeeTransaction("UPI", receiptRef);
       el("upi-modal").style.display = "none";
-      alert(`Receipt generated. Total collected via UPI.`);
+      alert(`Receipt ${receiptRef} saved. Total collected: ₹${total} via UPI.`);
     }
   } catch (err) {
     alert(`Save failed: ${err.message}`);
@@ -1368,12 +1398,12 @@ document.getElementById("billing-cancel").onclick = () => document.getElementByI
 
 // Shared fee-saving function — called either directly (non-UPI modes) or after
 // the patient confirms payment on the UPI overlay.
-async function saveFeeTransaction(mode) {
+async function saveFeeTransaction(mode, receiptNumber) {
   const consultationFee = Number(document.getElementById("b-consult-fee").value || 0);
   const medicineFee = Number(document.getElementById("b-med-fee").value || 0);
   const otherFee = Number(document.getElementById("b-other-fee").value || 0);
   const total = consultationFee + medicineFee + otherFee;
-  const receiptNumber = `RCPT-${Date.now()}-${Math.random().toString(36).slice(2,5).toUpperCase()}`;
+  receiptNumber = receiptNumber || `RCPT-${Date.now()}-${Math.random().toString(36).slice(2,5).toUpperCase()}`;
   const receipt = { id: `fee-${Date.now()}`, consultationFee, medicineFee, otherFee, total, mode, collectedAt: new Date().toISOString(), receiptNumber };
   // Fetch current receipts to build the array (in case this visit already has some)
   const visitSnap = await getDoc(doc(db, "visits", activeBillingVisitId));

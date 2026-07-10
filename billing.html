@@ -290,7 +290,13 @@ async function runReport() {
   const snap = await getDocs(q);
 
   let visits = [];
-  snap.forEach((d) => visits.push({ id: d.id, ...d.data() }));
+  snap.forEach((d) => {
+    const data = d.data();
+    // Drop prescription image data — billing never renders images and they can be hundreds of KB each.
+    delete data.prescriptions;
+    delete data.prescription;
+    visits.push({ id: d.id, ...data });
+  });
   visits = visits.filter((v) => v.fees || (v.receipts && v.receipts.length > 0));
 
   if (doctorFilter) {
