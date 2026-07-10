@@ -860,9 +860,13 @@ let todayVisits = [];
 let _todaySnapshotHash = "";
 onSnapshot(query(visitsRef, where("visitDate", "==", todayKey()), orderBy("tokenNumber")), (snap) => {
   todayVisits = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  const active = todayVisits.filter((v) => ["waiting", "called", "in_consultation"].includes(v.status));
+  // Active = in-progress tokens + completed tokens awaiting fee collection
+  const active = todayVisits.filter((v) =>
+    ["waiting", "called", "in_consultation"].includes(v.status) ||
+    (v.status === "completed" && !v.feeCollected && !v.fees)
+  );
   // Skip re-render if only unrelated fields changed (e.g. prescription uploads on completed visits).
-  const hash = active.map((v) => `${v.id}:${v.status}:${v.queueSequence ?? v.tokenNumber}:${v.vitals ? 1 : 0}:${v.fees ? 1 : 0}`).join("|");
+  const hash = active.map((v) => `${v.id}:${v.status}:${v.queueSequence ?? v.tokenNumber}:${v.vitals ? 1 : 0}:${v.fees ? 1 : 0}:${v.feeCollected ? 1 : 0}`).join("|");
   if (hash === _todaySnapshotHash) return;
   _todaySnapshotHash = hash;
   renderVisitRows(active, "today-tokens", false);
