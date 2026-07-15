@@ -131,16 +131,22 @@
             <button class="btn btn-outline" id="load-defaults-btn" title="Pre-populate inventory with generic medicines, injections and accessories">↓ Load defaults</button>
           </div>
         </div>
+        <div id="stock-selection-bar" style="display:none;align-items:center;gap:0.75rem;background:var(--teal-100);border:1px solid var(--teal-700);border-radius:8px;padding:0.5rem 0.85rem;margin-bottom:0.5rem;">
+          <span id="stock-sel-count" style="font-weight:600;font-size:0.88rem;color:var(--teal-900);"></span>
+          <button class="btn btn-sm btn-primary" id="stock-add-to-po">📋 Add to draft PO</button>
+          <button class="btn btn-sm btn-outline" id="stock-clear-sel" style="margin-left:auto;">✕ Clear selection</button>
+        </div>
         <div style="overflow-x:auto;">
           <table class="inv-table">
             <thead>
               <tr>
+                <th style="width:32px;"><input type="checkbox" id="stock-select-all" title="Select all visible" /></th>
                 <th>Item name</th><th>Category</th><th>Unit</th>
                 <th>Stock</th><th>Reorder at</th><th>Cost ₹</th><th>MRP ₹</th><th>Status</th><th></th>
               </tr>
             </thead>
             <tbody id="stock-tbody">
-              <tr><td colspan="9" class="muted" style="padding:1.5rem;text-align:center;">Loading inventory…</td></tr>
+              <tr><td colspan="10" class="muted" style="padding:1.5rem;text-align:center;">Loading inventory…</td></tr>
             </tbody>
           </table>
         </div>
@@ -495,11 +501,12 @@ function renderStockTable() {
   });
   if (rows.length === 0) {
     el("stock-tbody").innerHTML =
-      `<tr><td colspan="9" class="muted" style="padding:1.2rem;text-align:center;">${allItems.length === 0 ? "No items yet — click '+ Add item' or '↓ Load defaults'." : "No items match the current filter."}</td></tr>`;
+      `<tr><td colspan="10" class="muted" style="padding:1.2rem;text-align:center;">${allItems.length === 0 ? "No items yet — click '+ Add item' or '↓ Load defaults'." : "No items match the current filter."}</td></tr>`;
     return;
   }
   el("stock-tbody").innerHTML = rows.map(item => `
     <tr class="${rowClass(item)}">
+      <td style="text-align:center;"><input type="checkbox" class="stock-row-chk" data-id="${item.id}" /></td>
       <td><strong>${esc(item.name)}</strong></td>
       <td><span class="small">${esc(item.category || "—")}</span></td>
       <td>${esc(item.unit || "—")}</td>
@@ -518,6 +525,41 @@ function renderStockTable() {
 el("item-search").oninput = renderStockTable;
 el("cat-filter").onchange = renderStockTable;
 el("low-only").onchange   = renderStockTable;
+function updateSelectionBar() {
+  const checked = [...document.querySelectorAll(".stock-row-chk:checked")];
+  const bar = el("stock-selection-bar");
+  if (checked.length === 0) {
+    bar.style.display = "none";
+    el("stock-select-all").checked = false;
+    el("stock-select-all").indeterminate = false;
+  } else {
+    bar.style.display = "flex";
+    el("stock-sel-count").textContent = `${checked.length} item${checked.length !== 1 ? "s" : ""} selected`;
+    const all = document.querySelectorAll(".stock-row-chk");
+    el("stock-select-all").indeterminate = checked.length > 0 && checked.length < all.length;
+    el("stock-select-all").checked = checked.length === all.length;
+  }
+}
+el("stock-select-all").onchange = function() {
+  document.querySelectorAll(".stock-row-chk").forEach(c => { c.checked = this.checked; });
+  updateSelectionBar();
+};
+el("stock-clear-sel").onclick = () => {
+  document.querySelectorAll(".stock-row-chk").forEach(c => { c.checked = false; });
+  updateSelectionBar();
+};
+el("stock-add-to-po").onclick = () => {
+  const ids = [...document.querySelectorAll(".stock-row-chk:checked")].map(c => c.dataset.id);
+  const selected = ids.map(id => allItems.find(i => i.id === id)).filter(Boolean);
+  const prefill = selected.map(i => ({ itemId: i.id, itemName: i.name, qty: i.reorderQty || 1, unitCost: i.unitCost || 0 }));
+  openPOModal(null, prefill);
+  switchTab("pos");
+  document.querySelectorAll(".stock-row-chk").forEach(c => { c.checked = false; });
+  updateSelectionBar();
+};
+el("stock-tbody").addEventListener("change", (e) => {
+  if (e.target.classList.contains("stock-row-chk")) updateSelectionBar();
+});
 el("stock-tbody").addEventListener("click", async (e) => {
   if (e.target.dataset.edit)   openItemModal(allItems.find(i => i.id === e.target.dataset.edit));
   if (e.target.dataset.adjust) openAdjustModal(allItems.find(i => i.id === e.target.dataset.adjust));
