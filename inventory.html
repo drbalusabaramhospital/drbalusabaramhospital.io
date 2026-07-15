@@ -1076,19 +1076,92 @@ function renderPOs() {
         </tbody>
       </table>
       ${po.notes ? `<p class="small muted" style="margin:0 0 0.4rem;">${esc(po.notes)}</p>` : ""}
-      <div style="display:flex;gap:0.5rem;">
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
         <button class="btn btn-sm btn-outline" data-po-edit="${po.id}">Edit</button>
         ${canReceive ? `<button class="btn btn-sm btn-amber" data-po-recv="${po.id}">Receive items</button>` : ""}
+        <button class="btn btn-sm btn-outline" data-po-print="${po.id}" title="Print PO">🖨 Print</button>
+        <button class="btn btn-sm btn-outline" data-po-wa="${po.id}" title="Share via WhatsApp" style="color:#25d366;">📲 WhatsApp</button>
       </div>
     </div>`;
   }).join("");
 }
 el("po-list").addEventListener("click", (e) => {
-  const editId = e.target.dataset.poEdit;
-  const recvId = e.target.dataset.poRecv;
-  if (editId) openPOModal(allPOs.find(p => p.id === editId));
-  if (recvId) openReceiveModal(allPOs.find(p => p.id === recvId));
+  const editId  = e.target.dataset.poEdit;
+  const recvId  = e.target.dataset.poRecv;
+  const printId = e.target.dataset.poPrint;
+  const waId    = e.target.dataset.poWa;
+  if (editId)  openPOModal(allPOs.find(p => p.id === editId));
+  if (recvId)  openReceiveModal(allPOs.find(p => p.id === recvId));
+  if (printId) printPO(allPOs.find(p => p.id === printId));
+  if (waId)    whatsappPO(allPOs.find(p => p.id === waId));
 });
+
+function printPO(po) {
+  if (!po) return;
+  const total = (po.items || []).reduce((s, i) => s + (i.qty || 0) * (i.unitCost || 0), 0);
+  const date  = po.createdAt?.toDate?.()?.toLocaleDateString() || "";
+  const rows  = (po.items || []).map(i => `
+    <tr>
+      <td>${i.itemName}</td>
+      <td style="text-align:center;">${i.qty}</td>
+      <td style="text-align:center;">${i.receivedQty || 0}</td>
+      <td style="text-align:right;">₹${Number(i.unitCost || 0).toFixed(2)}</td>
+      <td style="text-align:right;">₹${(i.qty * (i.unitCost || 0)).toFixed(2)}</td>
+    </tr>`).join("");
+  const win = window.open("", "_blank", "width=700,height=900");
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>PO ${po.poNumber || ""}</title>
+    <style>
+      body { font-family: Arial, sans-serif; font-size: 13px; margin: 32px; color: #111; }
+      h2 { margin: 0 0 4px; font-size: 18px; }
+      .sub { color: #555; font-size: 12px; margin-bottom: 16px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+      th { background: #f0f0f0; text-align: left; padding: 6px 8px; border: 1px solid #ccc; font-size: 12px; }
+      td { padding: 6px 8px; border: 1px solid #ddd; }
+      .total { text-align: right; font-weight: bold; padding: 8px; font-size: 13px; }
+      .footer { margin-top: 32px; font-size: 11px; color: #888; }
+      @media print { button { display: none; } }
+    </style>
+  </head><body>
+    <h2>Purchase Order — ${po.poNumber || "—"}</h2>
+    <div class="sub">
+      Supplier: <strong>${po.supplier || "—"}</strong> &nbsp;|&nbsp;
+      Status: ${PO_STATUS[po.status] || po.status} &nbsp;|&nbsp;
+      Date: ${date}
+      ${po.notes ? `<br>Notes: ${po.notes}` : ""}
+    </div>
+    <table>
+      <thead><tr><th>Item</th><th style="text-align:center;">Ordered</th><th style="text-align:center;">Received</th><th style="text-align:right;">Unit cost</th><th style="text-align:right;">Amount</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="total">Estimated total: ₹${total.toFixed(2)}</div>
+    <div class="footer">Printed on ${new Date().toLocaleString()}</div>
+    <br><button onclick="window.print()">🖨 Print</button>
+  </body></html>`);
+  win.document.close();
+}
+
+function whatsappPO(po) {
+  if (!po) return;
+  const total = (po.items || []).reduce((s, i) => s + (i.qty || 0) * (i.unitCost || 0), 0);
+  const date  = po.createdAt?.toDate?.()?.toLocaleDateString() || "";
+  const lines = (po.items || []).map(i =>
+    `  • ${i.itemName} — Qty: ${i.qty} @ ₹${Number(i.unitCost || 0).toFixed(2)} = ₹${(i.qty * (i.unitCost || 0)).toFixed(2)}`
+  ).join("\n");
+  const text = [
+    `*Purchase Order — ${po.poNumber || "—"}*`,
+    `Supplier: ${po.supplier || "—"}`,
+    `Date: ${date}`,
+    `Status: ${PO_STATUS[po.status] || po.status}`,
+    po.notes ? `Notes: ${po.notes}` : "",
+    ``,
+    `*Items:*`,
+    lines,
+    ``,
+    `*Estimated total: ₹${total.toFixed(2)}*`,
+  ].filter(l => l !== null && l !== undefined).join("\n");
+  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+}
 
 // ── New / Edit PO Modal ───────────────────────────────────────────────────────
 el("new-po-btn").onclick = () => openPOModal(null);
