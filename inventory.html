@@ -332,6 +332,9 @@
       <span style="font-weight:600;font-size:0.88rem;color:var(--ink-soft);">Line items</span>
       <button class="btn btn-sm btn-outline" id="po-load-template" title="Fill with all items at or below reorder level using their reorder quantity">📋 Load reorder template</button>
     </div>
+    <div style="display:grid;grid-template-columns:1fr 80px 90px 28px;gap:0.4rem;padding:0 0 0.25rem 0;font-size:0.78rem;font-weight:600;color:var(--ink-soft);">
+      <span>Item</span><span>Qty</span><span>Cost price ₹/unit</span><span></span>
+    </div>
     <div id="po-item-rows"></div>
     <button class="btn btn-sm btn-outline" id="po-add-row" style="margin-top:0.35rem;">+ Add item</button>
     <p style="text-align:right;margin-top:0.6rem;font-size:0.9rem;">Estimated total: <strong id="po-total-est">₹0.00</strong></p>
@@ -1057,10 +1060,13 @@ function addPORow(prefill) {
   const itemOpts = allItems.map(i =>
     `<option value="${i.id}" data-cost="${i.unitCost || 0}"${prefill?.itemId === i.id ? " selected" : ""}>${esc(i.name)}</option>`
   ).join("");
+  const firstCost = prefill?.unitCost !== undefined
+    ? prefill.unitCost
+    : (allItems.find(i => i.id === (prefill?.itemId ?? allItems[0]?.id))?.unitCost || allItems[0]?.unitCost || 0);
   div.innerHTML = `
     <select class="po-item-sel" style="width:100%;font-size:0.85rem;">${itemOpts}</select>
     <input class="po-qty"  type="number" min="1" value="${prefill?.qty || 1}" inputmode="numeric" style="width:100%;" placeholder="Qty" />
-    <input class="po-cost" type="number" min="0" step="0.01" value="${prefill?.unitCost !== undefined ? prefill.unitCost : 0}" inputmode="decimal" style="width:100%;" placeholder="₹/unit" />
+    <input class="po-cost" type="number" min="0" step="0.01" value="${firstCost}" inputmode="decimal" style="width:100%;" title="Cost price — edit if needed" />
     <button type="button" class="btn btn-sm btn-danger" title="Remove">✕</button>`;
   div.querySelector("button").onclick = () => { div.remove(); updatePOTotal(); };
   const sel  = div.querySelector(".po-item-sel");
