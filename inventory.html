@@ -425,7 +425,10 @@ let allItems    = [];
 let allPOs      = [];
 let allRequests = [];
 let reqTemplates = [];
-let poFilter = "";
+let poFilter    = "";
+let poPage      = 0;
+let reqPage     = 0;
+const PAGE_SIZE = 10;
 
 // ── Live inventory listener ───────────────────────────────────────────────────
 const invRef = collection(db, "inventory");
@@ -805,16 +808,29 @@ async function loadRequests() {
       where("date", "==", date), orderBy("requestedAt", "desc")
     ));
     allRequests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    reqPage = 0;
     renderRequests(allRequests);
   } catch (e) {
     el("requests-list").innerHTML = `<p class="muted" style="color:var(--clay-500);">Error: ${e.message}</p>`;
   }
 }
+function paginationBar(total, page, totalPages, key) {
+  if (totalPages <= 1) return "";
+  const start = page * PAGE_SIZE + 1, end = Math.min((page + 1) * PAGE_SIZE, total);
+  return `<div style="display:flex;align-items:center;gap:0.5rem;justify-content:center;padding:0.75rem 0;flex-wrap:wrap;">
+    <button class="btn btn-sm btn-outline" data-pg-prev="${key}" ${page === 0 ? "disabled" : ""}>‹ Prev</button>
+    <span class="small muted">${start}–${end} of ${total}</span>
+    <button class="btn btn-sm btn-outline" data-pg-next="${key}" ${page >= totalPages - 1 ? "disabled" : ""}>Next ›</button>
+  </div>`;
+}
 function renderRequests(reqs) {
   if (reqs.length === 0) {
     el("requests-list").innerHTML = `<p class="muted">No staff requests for this date.</p>`; return;
   }
-  el("requests-list").innerHTML = reqs.map(r => {
+  const totalPages = Math.ceil(reqs.length / PAGE_SIZE);
+  reqPage = Math.min(reqPage, totalPages - 1);
+  const page = reqs.slice(reqPage * PAGE_SIZE, (reqPage + 1) * PAGE_SIZE);
+  el("requests-list").innerHTML = page.map(r => {
     const isOpen = r.status === "open" || r.status === "partial_return";
     const statusLabel = { open: "Open", partial_return: "Partial return", closed: "Closed" }[r.status] || r.status;
     const statusBadge = isOpen ? (r.status === "open" ? "badge-waiting" : "badge-called") : "badge-completed";
@@ -846,7 +862,7 @@ function renderRequests(reqs) {
         <button class="btn btn-sm btn-outline" style="color:#25d366;" data-wa-req="${r.id}">📲 WhatsApp</button>
       </div>
     </div>`;
-  }).join("");
+  }).join("") + paginationBar(reqs.length, reqPage, totalPages, "req");
 }
 
 el("requests-list").addEventListener("click", async (e) => {
@@ -1036,6 +1052,7 @@ el("ret-save").onclick = async () => {
 // ── PURCHASE ORDERS TAB ───────────────────────────────────────────────────────
 document.querySelectorAll(".po-fbtn").forEach(btn => btn.onclick = () => {
   poFilter = btn.dataset.pf;
+  poPage = 0;
   document.querySelectorAll(".po-fbtn").forEach(b => b.classList.remove("tab-active"));
   btn.classList.add("tab-active");
   renderPOs();
@@ -1045,6 +1062,7 @@ async function loadPOs() {
   try {
     const snap = await getDocs(query(collection(db, "purchaseOrders"), orderBy("createdAt", "desc"), limit(60)));
     allPOs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    poPage = 0;
     renderPOs();
   } catch (e) {
     el("po-list").innerHTML = `<p class="muted" style="color:var(--clay-500);">Error: ${e.message}</p>`;
@@ -1058,7 +1076,10 @@ function renderPOs() {
     el("po-list").innerHTML = `<p class="muted">${allPOs.length === 0 ? "No purchase orders yet." : "No POs match this filter."}</p>`;
     return;
   }
-  el("po-list").innerHTML = filtered.map(po => {
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  poPage = Math.min(poPage, totalPages - 1);
+  const pageItems = filtered.slice(poPage * PAGE_SIZE, (poPage + 1) * PAGE_SIZE);
+  el("po-list").innerHTML = pageItems.map(po => {
     const canReceive = po.status === "draft" || po.status === "sent" || po.status === "partial";
     const total = (po.items || []).reduce((s, i) => s + (i.qty || 0) * (i.unitCost || 0), 0);
     const createdAt = po.createdAt?.toDate?.();
@@ -1094,7 +1115,7 @@ function renderPOs() {
         <button class="btn btn-sm btn-outline" data-po-wa="${po.id}" title="Share via WhatsApp" style="color:#25d366;">📲 WhatsApp</button>
       </div>
     </div>`;
-  }).join("");
+  }).join("") + paginationBar(filtered.length, poPage, totalPages, "po");
 }
 el("po-list").addEventListener("click", (e) => {
   const editId  = e.target.dataset.poEdit;
@@ -1105,7 +1126,13 @@ el("po-list").addEventListener("click", (e) => {
   if (recvId)  openReceiveModal(allPOs.find(p => p.id === recvId));
   if (printId) printPO(allPOs.find(p => p.id === printId));
   if (waId)    whatsappPO(allPOs.find(p => p.id === waId));
+  if (e.target.dataset.pgNext === "po") { poPage++; renderPOs(); }
+  if (e.target.dataset.pgPrev === "po") { poPage--; renderPOs(); }
 });
+el("requests-list").addEventListener("click", async (e) => {
+  if (e.target.dataset.pgNext === "req") { reqPage++; renderRequests(allRequests); return; }
+  if (e.target.dataset.pgPrev === "req") { reqPage--; renderRequests(allRequests); return; }
+}, true);
 
 function printPO(po) {
   if (!po) return;
