@@ -166,7 +166,10 @@
     <div class="card flush">
       <div class="flex-between" style="padding:1rem 1.25rem 0;">
         <h2 style="margin:0;">Itemized transactions</h2>
-        <button class="btn btn-sm btn-outline" id="print-btn" onclick="window.print()">🖨 Print report</button>
+        <div style="display:flex;gap:0.5rem;">
+          <button class="btn btn-sm btn-outline" id="print-btn" onclick="window.print()">🖨 Print report</button>
+          <button class="btn btn-sm btn-outline" id="wa-report-btn" style="color:#25d366;">📲 WhatsApp</button>
+        </div>
       </div>
       <div id="transactions-table" style="padding:0 0 0.5rem;"><div class="empty-state">No transactions for this range.</div></div>
     </div>
@@ -471,6 +474,25 @@ function renderTransactions(receipts) {
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 }
+
+document.getElementById("wa-report-btn").onclick = () => {
+  const printHeader = document.getElementById("print-header")?.innerText?.trim() || "";
+  if (!printHeader) { alert("Fetch a report first."); return; }
+  const printSum  = document.getElementById("print-summary")?.innerText?.trim() || "";
+  const printDoc  = document.getElementById("print-by-doctor")?.innerText?.trim() || "";
+  const printMode = document.getElementById("print-by-mode")?.innerText?.trim() || "";
+  const text = [
+    `*Billing Report*`,
+    printHeader,
+    ``,
+    printSum,
+    ``,
+    printDoc,
+    ``,
+    printMode,
+  ].filter(Boolean).join("\n");
+  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+};
 </script>
 <script>if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(()=>{});}</script>
 </body>

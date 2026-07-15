@@ -1300,17 +1300,18 @@ document.getElementById("upi-confirm").onclick = async () => {
 };
 
 // ----- View receipts -----
+let _receiptVisit = null;
 function openReceiptsView(visitId) {
-  const visit = historyVisits.find((v) => v.id === visitId);
-  if (!visit) return;
-  el("receipts-token-label").textContent = `#${visit.tokenNumber} ${escapeHtml(visit.patientName)}`;
-  const receipts = getAllReceipts(visit);
+  _receiptVisit = historyVisits.find((v) => v.id === visitId) || null;
+  if (!_receiptVisit) return;
+  el("receipts-token-label").textContent = `#${_receiptVisit.tokenNumber} ${escapeHtml(_receiptVisit.patientName)}`;
+  const receipts = getAllReceipts(_receiptVisit);
   if (receipts.length === 0) {
     el("receipts-list").innerHTML = '<p class="small muted">No receipts on record.</p>';
   } else {
     const totalAll = receipts.reduce((s, r) => s + (r.total || 0), 0);
     el("receipts-list").innerHTML =
-      receipts.map((r) => `
+      receipts.map((r, idx) => `
         <div style="padding:0.5rem 0;border-bottom:1px solid var(--line);">
           <div class="flex-between" style="margin-bottom:0.2rem;">
             <strong style="font-size:0.9rem;">₹${r.total || 0}</strong>
@@ -1320,6 +1321,10 @@ function openReceiptsView(visitId) {
           ${(r.consultationFee || r.medicineFee || r.otherFee)
             ? `<div class="small muted">Consult ₹${r.consultationFee||0} · Medicine ₹${r.medicineFee||0} · Other ₹${r.otherFee||0}</div>`
             : ""}
+          <div style="display:flex;gap:0.4rem;margin-top:0.35rem;">
+            <button class="btn btn-sm btn-outline" data-print-rcpt="${idx}">🖨 Print</button>
+            <button class="btn btn-sm btn-outline" style="color:#25d366;" data-wa-rcpt="${idx}">📲 WhatsApp</button>
+          </div>
         </div>`).join("")
       + `<div class="flex-between" style="margin-top:0.75rem;padding-top:0.5rem;border-top:2px solid var(--line);">
            <strong>Grand total</strong><strong>₹${totalAll}</strong>
@@ -1327,8 +1332,69 @@ function openReceiptsView(visitId) {
   }
   el("receipts-modal").style.display = "flex";
 }
+el("receipts-list").addEventListener("click", (e) => {
+  const printIdx = e.target.dataset.printRcpt;
+  const waIdx    = e.target.dataset.waRcpt;
+  if (printIdx !== undefined && _receiptVisit) printReceipt(getAllReceipts(_receiptVisit)[Number(printIdx)], _receiptVisit);
+  if (waIdx    !== undefined && _receiptVisit) whatsappReceipt(getAllReceipts(_receiptVisit)[Number(waIdx)],    _receiptVisit);
+});
 
 document.getElementById("receipts-close").onclick = () => el("receipts-modal").style.display = "none";
+
+function printReceipt(r, visit) {
+  const win = window.open("", "_blank", "width=400,height=600");
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${r.receiptNumber||""}</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 13px; margin: 24px; color: #111; max-width: 320px; }
+    h2 { font-size: 15px; margin: 0 0 2px; text-align:center; }
+    .center { text-align:center; }
+    .line { border-top: 1px dashed #999; margin: 8px 0; }
+    .row { display:flex; justify-content:space-between; margin: 3px 0; }
+    .total { font-weight: bold; font-size: 15px; }
+    .small { font-size: 11px; color: #555; }
+    @media print { button { display:none; } }
+  </style></head><body>
+    <h2>${escapeHtml(document.querySelector("title")?.textContent?.split("—")[0]?.trim() || "Sabaram Hospital")}</h2>
+    <div class="center small">Receipt</div>
+    <div class="line"></div>
+    <div class="row"><span>Patient</span><span>${escapeHtml(visit.patientName || "—")}</span></div>
+    <div class="row"><span>Token #</span><span>${visit.tokenNumber || "—"}</span></div>
+    <div class="row"><span>Date</span><span>${fmtDate(r.collectedAt)}</span></div>
+    <div class="row"><span>Receipt #</span><span>${r.receiptNumber || "—"}</span></div>
+    <div class="row"><span>Mode</span><span>${escapeHtml(r.mode || "—")}</span></div>
+    <div class="line"></div>
+    <div class="row"><span>Consultation</span><span>₹${r.consultationFee || 0}</span></div>
+    <div class="row"><span>Medicine</span><span>₹${r.medicineFee || 0}</span></div>
+    <div class="row"><span>Other</span><span>₹${r.otherFee || 0}</span></div>
+    <div class="line"></div>
+    <div class="row total"><span>Total</span><span>₹${r.total || 0}</span></div>
+    <div class="line"></div>
+    <div class="center small" style="margin-top:8px;">Thank you for visiting</div>
+    <br><button onclick="window.print()">🖨 Print</button>
+  </body></html>`);
+  win.document.close();
+}
+
+function whatsappReceipt(r, visit) {
+  const clinicName = document.querySelector("title")?.textContent?.split("—")[0]?.trim() || "Sabaram Hospital";
+  const text = [
+    `*${clinicName}*`,
+    `*Receipt — ${r.receiptNumber || "—"}*`,
+    ``,
+    `Patient: ${visit.patientName || "—"}`,
+    `Token: #${visit.tokenNumber || "—"}`,
+    `Date: ${fmtDate(r.collectedAt)}`,
+    `Mode: ${r.mode || "—"}`,
+    ``,
+    `Consultation: ₹${r.consultationFee || 0}`,
+    `Medicine: ₹${r.medicineFee || 0}`,
+    `Other: ₹${r.otherFee || 0}`,
+    `*Total: ₹${r.total || 0}*`,
+    ``,
+    `Thank you for visiting!`,
+  ].join("\n");
+  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+}
 
 async function deleteVisit(visitId) {
   const visit = historyVisits.find((v) => v.id === visitId);

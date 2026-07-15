@@ -421,8 +421,9 @@ if (userSnap.exists()) {
 const el = (id) => document.getElementById(id);
 
 // ── Global state ──────────────────────────────────────────────────────────────
-let allItems = [];
-let allPOs   = [];
+let allItems    = [];
+let allPOs      = [];
+let allRequests = [];
 let reqTemplates = [];
 let poFilter = "";
 
@@ -803,7 +804,8 @@ async function loadRequests() {
       collection(db, "staffRequests"),
       where("date", "==", date), orderBy("requestedAt", "desc")
     ));
-    renderRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    allRequests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderRequests(allRequests);
   } catch (e) {
     el("requests-list").innerHTML = `<p class="muted" style="color:var(--clay-500);">Error: ${e.message}</p>`;
   }
@@ -838,16 +840,25 @@ function renderRequests(reqs) {
           </tr>`).join("")}
         </tbody>
       </table>
-      ${isOpen ? `<div style="margin-top:0.6rem;"><button class="btn btn-sm btn-amber" data-ret-req="${r.id}">Add return</button></div>` : ""}
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.6rem;">
+        ${isOpen ? `<button class="btn btn-sm btn-amber" data-ret-req="${r.id}">Add return</button>` : ""}
+        <button class="btn btn-sm btn-outline" data-print-req="${r.id}">🖨 Print</button>
+        <button class="btn btn-sm btn-outline" style="color:#25d366;" data-wa-req="${r.id}">📲 WhatsApp</button>
+      </div>
     </div>`;
   }).join("");
 }
 
 el("requests-list").addEventListener("click", async (e) => {
-  const reqId = e.target.dataset.retReq;
-  if (!reqId) return;
-  const snap = await getDoc(doc(db, "staffRequests", reqId));
-  if (snap.exists()) openReturnModal({ id: snap.id, ...snap.data() });
+  const reqId      = e.target.dataset.retReq;
+  const printReqId = e.target.dataset.printReq;
+  const waReqId    = e.target.dataset.waReq;
+  if (reqId) {
+    const snap = await getDoc(doc(db, "staffRequests", reqId));
+    if (snap.exists()) openReturnModal({ id: snap.id, ...snap.data() });
+  }
+  if (printReqId) { const r = allRequests?.find(x => x.id === printReqId); if (r) printStaffRequest(r); }
+  if (waReqId)    { const r = allRequests?.find(x => x.id === waReqId);    if (r) whatsappStaffRequest(r); }
 });
 
 // ── New Request Modal ─────────────────────────────────────────────────────────
@@ -1159,6 +1170,65 @@ function whatsappPO(po) {
     lines,
     ``,
     `*Estimated total: ₹${total.toFixed(2)}*`,
+  ].filter(l => l !== null && l !== undefined).join("\n");
+  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+}
+
+function printStaffRequest(r) {
+  const requestedAt = r.requestedAt?.toDate?.()?.toLocaleString() || "";
+  const rows = (r.items || []).map(i => `
+    <tr>
+      <td>${i.itemName}</td>
+      <td style="text-align:center;">${i.requestedQty}</td>
+      <td style="text-align:center;">${i.returnedQty || 0}</td>
+      <td style="text-align:center;font-weight:600;">${i.requestedQty - (i.returnedQty || 0)}</td>
+    </tr>`).join("");
+  const win = window.open("", "_blank", "width=500,height=700");
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Staff Request ${r.requestNumber||""}</title>
+    <style>
+      body { font-family: Arial, sans-serif; font-size: 13px; margin: 28px; color: #111; }
+      h2 { font-size: 16px; margin: 0 0 4px; }
+      .sub { color: #555; font-size: 12px; margin-bottom: 14px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+      th { background: #f0f0f0; text-align: left; padding: 5px 8px; border: 1px solid #ccc; font-size: 12px; }
+      td { padding: 5px 8px; border: 1px solid #ddd; }
+      .footer { margin-top: 28px; font-size: 11px; color: #888; }
+      @media print { button { display: none; } }
+    </style>
+  </head><body>
+    <h2>Staff Request — ${r.requestNumber || "—"}</h2>
+    <div class="sub">
+      Staff: <strong>${r.staffName || "—"}</strong> &nbsp;|&nbsp;
+      Date: ${r.date || ""} &nbsp;|&nbsp;
+      Time: ${requestedAt} &nbsp;|&nbsp;
+      Status: ${r.status || "—"}
+      ${r.notes ? `<br>Notes: ${r.notes}` : ""}
+    </div>
+    <table>
+      <thead><tr><th>Item</th><th style="text-align:center;">Issued</th><th style="text-align:center;">Returned</th><th style="text-align:center;">Net out</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="footer">Printed on ${new Date().toLocaleString()}</div>
+    <br><button onclick="window.print()">🖨 Print</button>
+  </body></html>`);
+  win.document.close();
+}
+
+function whatsappStaffRequest(r) {
+  const requestedAt = r.requestedAt?.toDate?.()?.toLocaleString() || "";
+  const lines = (r.items || []).map(i =>
+    `  • ${i.itemName} — Issued: ${i.requestedQty}, Returned: ${i.returnedQty || 0}, Net: ${i.requestedQty - (i.returnedQty || 0)}`
+  ).join("\n");
+  const text = [
+    `*Staff Request — ${r.requestNumber || "—"}*`,
+    `Staff: ${r.staffName || "—"}`,
+    `Date: ${r.date || ""} ${requestedAt}`,
+    `Status: ${r.status || "—"}`,
+    r.notes ? `Notes: ${r.notes}` : "",
+    ``,
+    `*Items:*`,
+    lines,
   ].filter(l => l !== null && l !== undefined).join("\n");
   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
 }
