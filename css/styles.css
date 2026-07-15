@@ -246,12 +246,22 @@ input, select, textarea {
   -webkit-appearance: none;
   appearance: none;
 }
-/* Date and time inputs — don't apply appearance:none (it breaks the native picker
-   on some browsers), but do inherit color-scheme so the calendar popup matches the theme */
+/* Restore native appearance for controls that need it */
 input[type="date"], input[type="time"] {
   -webkit-appearance: auto;
   appearance: auto;
   color-scheme: inherit;
+}
+input[type="checkbox"], input[type="radio"] {
+  -webkit-appearance: auto;
+  appearance: auto;
+  width: auto;
+  height: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  accent-color: var(--teal-900);
 }
 select {
   /* Restore dropdown arrow removed by appearance:none */
