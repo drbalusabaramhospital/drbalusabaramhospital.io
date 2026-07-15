@@ -64,13 +64,6 @@
         { "fieldPath": "date",        "order": "ASCENDING"  },
         { "fieldPath": "requestedAt", "order": "DESCENDING" }
       ]
-    },
-    {
-      "collectionGroup": "purchaseOrders",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
     }
   ],
   "fieldOverrides": []
