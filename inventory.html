@@ -362,9 +362,10 @@
       Opening stock is set to <strong>0</strong> — adjust via the Adjust Stock button after loading.
     </p>
     <div id="defaults-cat-list" style="display:flex;flex-direction:column;gap:0.6rem;max-height:420px;overflow-y:auto;padding-right:0.4rem;"></div>
-    <div class="modal-footer" style="justify-content:space-between;">
-      <label style="display:flex;align-items:center;gap:0.35rem;font-size:0.88rem;cursor:pointer;">
-        <input type="checkbox" id="defaults-all" checked /> Select / deselect all
+    <div class="modal-footer" style="justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding-top:0.75rem;margin-top:0.5rem;">
+      <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.88rem;font-weight:600;color:var(--teal-700);user-select:none;">
+        <input type="checkbox" id="defaults-all" checked style="width:16px;height:16px;cursor:pointer;" />
+        Select / deselect all
       </label>
       <div style="display:flex;gap:0.6rem;">
         <button class="btn btn-outline" id="defaults-cancel">Cancel</button>
@@ -1339,14 +1340,14 @@ const SEED_DATA = {
 el("load-defaults-btn").onclick = () => {
   const container = el("defaults-cat-list");
   container.innerHTML = Object.entries(SEED_DATA).map(([cat, items]) => `
-    <div style="border:1px solid var(--line);border-radius:8px;padding:0.6rem 0.75rem;">
-      <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-weight:600;font-size:0.9rem;">
-        <input type="checkbox" class="def-cat-chk" data-cat="${esc(cat)}" checked />
-        ${esc(cat)}
-        <span class="small muted" style="font-weight:400;">(${items.length} items)</span>
+    <div style="border:1px solid var(--line);border-radius:6px;padding:0.5rem 0.65rem;display:flex;flex-direction:column;gap:0.25rem;">
+      <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;margin:0;">
+        <input type="checkbox" class="def-cat-chk" data-cat="${esc(cat)}" checked style="width:15px;height:15px;flex-shrink:0;cursor:pointer;" />
+        <span style="font-weight:600;font-size:0.88rem;">${esc(cat)}</span>
+        <span style="font-size:0.78rem;color:var(--ink-soft);font-weight:400;">(${items.length} items)</span>
       </label>
-      <div style="margin-top:0.35rem;font-size:0.78rem;color:var(--ink-soft);padding-left:1.4rem;">
-        ${items.map(i => esc(i.name)).join(" · ")}
+      <div style="font-size:0.75rem;color:var(--ink-soft);padding-left:1.5rem;line-height:1.5;">
+        ${items.map(i => esc(i.name)).join(" &middot; ")}
       </div>
     </div>`).join("");
   el("defaults-all").checked = true;
