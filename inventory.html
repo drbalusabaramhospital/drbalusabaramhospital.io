@@ -488,7 +488,7 @@ function renderStockTable() {
   });
   if (rows.length === 0) {
     el("stock-tbody").innerHTML =
-      `<tr><td colspan="9" class="muted" style="padding:1.2rem;text-align:center;">${allItems.length === 0 ? "No items yet — click "+ Add item" or "↓ Load defaults"." : "No items match the current filter."}</td></tr>`;
+      `<tr><td colspan="9" class="muted" style="padding:1.2rem;text-align:center;">${allItems.length === 0 ? "No items yet — click '+ Add item' or '↓ Load defaults'." : "No items match the current filter."}</td></tr>`;
     return;
   }
   el("stock-tbody").innerHTML = rows.map(item => `
