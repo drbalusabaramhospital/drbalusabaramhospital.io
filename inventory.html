@@ -510,16 +510,26 @@ function renderStockTable() {
       <td>${stockBadge(item)}</td>
       <td style="white-space:nowrap;">
         <button class="btn btn-sm btn-outline" data-edit="${item.id}" style="margin-right:0.3rem;">Edit</button>
-        <button class="btn btn-sm btn-vitals-pending" data-adjust="${item.id}">Adjust</button>
+        <button class="btn btn-sm btn-vitals-pending" data-adjust="${item.id}" style="margin-right:0.3rem;">Adjust</button>
+        <button class="btn btn-sm btn-danger" data-delete="${item.id}" data-name="${esc(item.name)}">Delete</button>
       </td>
     </tr>`).join("");
 }
 el("item-search").oninput = renderStockTable;
 el("cat-filter").onchange = renderStockTable;
 el("low-only").onchange   = renderStockTable;
-el("stock-tbody").addEventListener("click", (e) => {
+el("stock-tbody").addEventListener("click", async (e) => {
   if (e.target.dataset.edit)   openItemModal(allItems.find(i => i.id === e.target.dataset.edit));
   if (e.target.dataset.adjust) openAdjustModal(allItems.find(i => i.id === e.target.dataset.adjust));
+  if (e.target.dataset.delete) {
+    const id   = e.target.dataset.delete;
+    const name = e.target.dataset.name;
+    if (!confirm(`Delete "${name}" from inventory?\n\nThis cannot be undone. Stock movement history is kept.`)) return;
+    try {
+      const { deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+      await deleteDoc(doc(db, "inventory", id));
+    } catch (err) { alert("Delete failed: " + err.message); }
+  }
 });
 
 // ── Add / Edit Item modal ─────────────────────────────────────────────────────
