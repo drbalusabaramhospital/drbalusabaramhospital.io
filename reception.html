@@ -55,6 +55,7 @@
       <a href="reception.html" class="active">Reception</a>
       <a href="patients.html">Patients</a>
       <a href="billing.html">Billing</a>
+      <a href="inventory.html">Inventory</a>
       <a href="board.html">Queue Board</a>
       <a href="admin.html">Admin Setup</a>
       <a href="backup.html">Backup</a>
@@ -216,6 +217,17 @@
       <label for="b-mode">Payment mode</label>
       <select id="b-mode"><option>Cash</option><option>Card</option><option selected>UPI</option><option>Other</option></select>
     </div>
+    <!-- Optional items-dispensed section — does not block fee collection if left empty -->
+    <details id="dispense-details" style="margin-bottom:0.75rem;">
+      <summary style="cursor:pointer;font-weight:600;font-size:0.88rem;color:var(--teal-900);padding:0.25rem 0;user-select:none;">
+        💊 Items dispensed (optional)
+      </summary>
+      <div style="margin-top:0.5rem;">
+        <div id="dispense-rows"></div>
+        <button type="button" class="btn btn-sm btn-outline" id="dispense-add-row" style="margin-top:0.35rem;">+ Add item</button>
+        <p class="small muted" style="margin-top:0.35rem;">Items are deducted from inventory stock when the fee is collected.</p>
+      </div>
+    </details>
     <p class="flex-between"><strong>Total</strong> <strong id="b-total">₹0</strong></p>
     <div class="flex-between">
       <button class="btn btn-outline" id="billing-cancel">Cancel</button>
@@ -1274,6 +1286,9 @@ document.getElementById("upi-confirm").onclick = async () => {
       const receiptRef = el("upi-modal").dataset.receipt;
       const { total } = await saveFeeTransaction("UPI", receiptRef);
       el("upi-modal").style.display = "none";
+      const dispItems = getDispenseItems();
+      const visit = todayVisits.find((v) => v.id === activeBillingVisitId) || historyVisits.find((v) => v.id === activeBillingVisitId);
+      if (dispItems.length) saveDispenseMovements(activeBillingVisitId, visit?.patientName, dispItems).catch(console.error);
       alert(`Receipt ${receiptRef} saved. Total collected: ₹${total} via UPI.`);
     }
   } catch (err) {
@@ -1403,7 +1418,64 @@ function openBilling(visitId, defaultFee) {
   document.getElementById("b-med-fee").value = 0;
   document.getElementById("b-other-fee").value = 0;
   updateTotal();
+  // Reset dispense items
+  el("dispense-rows").innerHTML = "";
+  el("dispense-details").removeAttribute("open");
   el("billing-modal").style.display = "flex";
+}
+
+// ── Billing: Items-dispensed helpers ─────────────────────────────────────────
+// Inventory items are loaded lazily on first use so they don't impact page startup.
+let _invItems = null;
+async function loadInvItems() {
+  if (_invItems) return _invItems;
+  const snap = await getDocs(query(collection(db, "inventory"), orderBy("name")));
+  _invItems = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return _invItems;
+}
+el("dispense-add-row").onclick = async () => {
+  const items = await loadInvItems();
+  if (items.length === 0) { alert("No inventory items found. Add items in the Inventory page first."); return; }
+  addDispenseRow(items);
+};
+function addDispenseRow(items, prefill) {
+  const div = document.createElement("div");
+  div.style.cssText = "display:grid;grid-template-columns:1fr 70px 24px;gap:0.35rem;align-items:center;margin-bottom:0.35rem;";
+  const opts = items.map(i =>
+    `<option value="${i.id}" data-name="${i.name.replace(/"/g,"&quot;")}"${prefill?.itemId===i.id?" selected":""}>${i.name} (${i.currentStock??0} ${i.unit||"pcs"})</option>`
+  ).join("");
+  div.innerHTML = `
+    <select class="disp-item-sel" style="font-size:0.82rem;padding:0.25rem 0.4rem;border:1px solid var(--line);border-radius:5px;background:var(--paper-dim);color:var(--ink);">${opts}</select>
+    <input class="disp-qty" type="number" min="1" value="${prefill?.qty||1}" inputmode="numeric" style="width:100%;padding:0.25rem 0.4rem;border:1px solid var(--line);border-radius:5px;background:var(--paper-dim);color:var(--ink);" />
+    <button type="button" style="background:none;border:none;cursor:pointer;color:var(--clay-500);font-size:0.9rem;padding:0;" title="Remove">✕</button>`;
+  div.querySelector("button").onclick = () => div.remove();
+  el("dispense-rows").appendChild(div);
+}
+function getDispenseItems() {
+  return [...el("dispense-rows").querySelectorAll("div")].map(row => ({
+    itemId:   row.querySelector(".disp-item-sel")?.value,
+    itemName: row.querySelector(".disp-item-sel")?.selectedOptions[0]?.dataset.name || "",
+    qty:      Number(row.querySelector(".disp-qty")?.value) || 1,
+  })).filter(i => i.itemId && i.qty > 0);
+}
+async function saveDispenseMovements(visitId, patientName, items) {
+  if (!items.length) return;
+  await runTransaction(db, async (tx) => {
+    const refs  = items.map(i => doc(db, "inventory", i.itemId));
+    const snaps = await Promise.all(refs.map(r => tx.get(r)));
+    snaps.forEach((snap, i) => {
+      if (!snap.exists()) return;
+      const newStock = Math.max(0, (snap.data().currentStock ?? 0) - items[i].qty);
+      tx.update(refs[i], { currentStock: newStock });
+      const movRef = doc(collection(db, "stockMovements"));
+      tx.set(movRef, {
+        itemId: items[i].itemId, itemName: items[i].itemName,
+        type: "out_patient", qty: -items[i].qty, balanceAfter: newStock,
+        visitId: visitId || null, patientName: patientName || null,
+        date: todayKey(), createdAt: serverTimestamp(),
+      });
+    });
+  });
 }
 ["b-consult-fee","b-med-fee","b-other-fee"].forEach((id) => document.getElementById(id).addEventListener("input", updateTotal));
 function updateTotal() {
@@ -1491,6 +1563,10 @@ document.getElementById("billing-save").onclick = async () => {
   // Non-UPI path — save directly and close.
   const { total, mode: savedMode } = await saveFeeTransaction(mode);
   el("billing-modal").style.display = "none";
+  // Dispense items if any were added
+  const dispItems = getDispenseItems();
+  const visit = todayVisits.find((v) => v.id === activeBillingVisitId) || historyVisits.find((v) => v.id === activeBillingVisitId);
+  if (dispItems.length) saveDispenseMovements(activeBillingVisitId, visit?.patientName, dispItems).catch(console.error);
   alert(`Receipt generated. Total collected: ₹${total} via ${savedMode}.`);
 };
 

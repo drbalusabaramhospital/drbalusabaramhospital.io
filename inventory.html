@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Clinic Queue" />
+<link rel="apple-touch-icon" href="assets/icon-192.png" />
+<title>Inventory — Clinic Queue</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" type="image/svg+xml" href="assets/icon.svg" />
+<link rel="stylesheet" href="css/styles.css" />
+<style>
+.inv-table { width:100%;border-collapse:collapse;font-size:0.88rem; }
+.inv-table th { background:var(--paper-dim);padding:0.48rem 0.65rem;text-align:left;font-weight:600;color:var(--ink-soft);border-bottom:2px solid var(--line); }
+.inv-table td { padding:0.48rem 0.65rem;border-bottom:1px solid var(--line);vertical-align:middle; }
+.inv-table tr:last-child td { border-bottom:none; }
+.row-low td { background:var(--amber-100); }
+.row-out td { background:var(--clay-100); }
+.stkbadge { display:inline-block;padding:2px 8px;border-radius:10px;font-size:0.72rem;font-weight:600; }
+.stkbadge-ok  { background:var(--sage-100);color:var(--sage-700); }
+.stkbadge-low { background:var(--amber-100);color:var(--amber-700); }
+.stkbadge-out { background:var(--clay-100);color:var(--clay-500); }
+.stkbadge-in  { background:var(--teal-100);color:var(--teal-900); }
+.modal-bg { position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(28,36,34,0.55);z-index:100;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:1.5rem; }
+.modal-box { background:var(--paper);border-radius:var(--radius);padding:1.5rem;width:100%;max-width:520px;box-shadow:0 8px 32px rgba(15,76,79,0.18); }
+.modal-box.wide { max-width:680px; }
+.modal-title { font-size:1.05rem;font-weight:700;color:var(--teal-900);margin:0 0 1.1rem; }
+.modal-footer { display:flex;justify-content:flex-end;gap:0.6rem;margin-top:1.1rem;padding-top:0.9rem;border-top:1px solid var(--line); }
+.req-card,.po-card { border:1px solid var(--line);border-radius:var(--radius);padding:0.85rem 1rem;margin-bottom:0.75rem; }
+.req-card.open    { border-left:4px solid var(--amber-500); }
+.req-card.partial { border-left:4px solid var(--teal-500); }
+.req-card.closed  { border-left:4px solid var(--sage-500);opacity:0.85; }
+.po-card.draft    { border-left:4px solid var(--teal-500); }
+.po-card.sent     { border-left:4px solid var(--amber-500); }
+.po-card.partial  { border-left:4px solid var(--sage-500); }
+.po-card.received { border-left:4px solid var(--sage-700);opacity:0.85; }
+.line-item-row { display:grid;grid-template-columns:1fr 80px 80px 28px;gap:0.4rem;align-items:center;margin-bottom:0.4rem; }
+.items-sub { width:100%;font-size:0.82rem;border-collapse:collapse;margin-top:0.4rem; }
+.items-sub th { padding:0.28rem 0.5rem;background:var(--paper-dim);font-weight:600;color:var(--ink-soft);border-bottom:1px solid var(--line); }
+.items-sub td { padding:0.28rem 0.5rem;border-bottom:1px solid var(--line); }
+.items-sub tr:last-child td { border-bottom:none; }
+#low-stock-bar { padding:0.55rem 1rem;background:var(--amber-100);border:1px solid var(--amber-500);border-radius:var(--radius);margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;font-size:0.88rem;color:var(--amber-700); }
+</style>
+<script>
+(function() {
+  const days = Number(localStorage.getItem("clinic-queue-backup-reminder-days") || 0);
+  if (days === 0) return;
+  const last = localStorage.getItem("clinic-queue-last-backup");
+  const overdue = !last || (Date.now() - new Date(last).getTime()) > days * 86400000;
+  if (!overdue) return;
+  document.addEventListener("DOMContentLoaded", function() {
+    const header = document.querySelector(".app-shell > header");
+    if (!header) return;
+    const banner = document.createElement("div");
+    banner.className = "backup-reminder-banner";
+    const daysAgo = last ? Math.floor((Date.now()-new Date(last).getTime())/86400000) : null;
+    banner.innerHTML = `<span>⚠</span><span>${daysAgo !== null ? `Backup overdue — last backup was ${daysAgo} day(s) ago.` : "No backup recorded yet."} <a href="backup.html">Back up now →</a></span><button onclick="this.parentElement.remove()" title="Dismiss">✕</button>`;
+    header.after(banner);
+  });
+})();
+</script>
+<script>
+  const _t = localStorage.getItem("clinic-queue-theme") || "light";
+  document.addEventListener("DOMContentLoaded", () => {
+    if (_t === "dark")     document.body.classList.add("theme-dark");
+    if (_t === "midnight") document.body.classList.add("theme-midnight");
+    if (_t === "forest")   document.body.classList.add("theme-forest");
+    if (_t === "sunset")   document.body.classList.add("theme-sunset");
+  });
+</script>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="brand"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" width="28" height="28" aria-hidden="true" style="flex-shrink:0;border-radius:6px;">
+  <rect width="72" height="72" rx="16" fill="white"/>
+  <text x="36" y="37" text-anchor="middle" font-size="28" font-weight="800" fill="#0F4C4F"
+    font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif">Q</text>
+  <polyline points="8,56 15,56 19,48 23,64 27,44 31,60 35,56 64,56"
+    fill="none" stroke="#E8A23D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg> <span data-clinic-name>Clinic Queue</span></div>
+    <nav id="nav-links">
+      <a href="reception.html">Reception</a>
+      <a href="patients.html">Patients</a>
+      <a href="billing.html">Billing</a>
+      <a href="inventory.html" class="active">Inventory</a>
+      <a href="board.html">Queue Board</a>
+    </nav>
+    <div class="user-pill"><span id="user-email">—</span><button id="logout-btn">Sign out</button></div>
+    <button id="theme-toggle-btn" title="Switch theme" style="background:none;border:none;cursor:pointer;font-size:1.1rem;padding:0.2rem 0.4rem;opacity:0.8;" aria-label="Switch theme">🎨</button>
+  </header>
+
+  <main class="page">
+    <div class="page-header">
+      <h1>Inventory</h1>
+      <p>Manage medical stock levels, dispense items to patients, handle staff requests, and track purchase orders.</p>
+    </div>
+
+    <div id="low-stock-bar" style="display:none;">
+      ⚠ <span id="low-stock-msg"></span>
+      <a href="#" id="low-stock-link" style="margin-left:0.4rem;font-weight:600;color:var(--amber-700);">Show items →</a>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;gap:0;border-bottom:2px solid var(--line);margin-bottom:1rem;flex-wrap:wrap;">
+        <button id="tab-stock"    class="tab-btn tab-active">Stock</button>
+        <button id="tab-reports"  class="tab-btn">Reports</button>
+        <button id="tab-requests" class="tab-btn">Staff Requests</button>
+        <button id="tab-pos"      class="tab-btn">Purchase Orders</button>
+      </div>
+
+      <!-- ── STOCK TAB ── -->
+      <div id="pane-stock">
+        <div class="flex-between" style="flex-wrap:wrap;gap:0.6rem;margin-bottom:0.9rem;">
+          <div class="tag-row" style="flex-wrap:wrap;gap:0.5rem;">
+            <input id="item-search" type="search" placeholder="Search by name…"
+              style="padding:0.35rem 0.65rem;border:1px solid var(--line);border-radius:6px;background:var(--paper-dim);color:var(--ink);font-size:0.88rem;min-width:170px;" />
+            <select id="cat-filter"
+              style="padding:0.35rem 0.65rem;border:1px solid var(--line);border-radius:6px;background:var(--paper-dim);color:var(--ink);font-size:0.88rem;">
+              <option value="">All categories</option>
+            </select>
+            <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.88rem;cursor:pointer;white-space:nowrap;">
+              <input type="checkbox" id="low-only" /> Low stock only
+            </label>
+          </div>
+          <button class="btn btn-primary" id="add-item-btn">+ Add item</button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="inv-table">
+            <thead>
+              <tr>
+                <th>Item name</th><th>Category</th><th>Unit</th>
+                <th>Stock</th><th>Reorder at</th><th>Unit cost</th><th>Status</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="stock-tbody">
+              <tr><td colspan="8" class="muted" style="padding:1.5rem;text-align:center;">Loading inventory…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── REPORTS TAB ── -->
+      <div id="pane-reports" style="display:none;">
+        <div class="flex-between" style="flex-wrap:wrap;gap:0.75rem;margin-bottom:1rem;align-items:flex-end;">
+          <div class="tag-row" style="flex-wrap:wrap;gap:0.5rem;align-items:flex-end;">
+            <button class="btn btn-sm btn-outline" data-rpreset="today">Today</button>
+            <button class="btn btn-sm btn-outline" data-rpreset="yesterday">Yesterday</button>
+            <button class="btn btn-sm btn-outline" data-rpreset="last7">Last 7 days</button>
+            <button class="btn btn-sm btn-outline" data-rpreset="thismonth">This month</button>
+            <div style="display:flex;gap:0.4rem;align-items:flex-end;">
+              <div class="field" style="margin-bottom:0;"><label style="font-size:0.8rem;">From</label><input id="rpt-from" type="date" style="padding:0.3rem 0.5rem;" /></div>
+              <div class="field" style="margin-bottom:0;"><label style="font-size:0.8rem;">To</label><input id="rpt-to" type="date" style="padding:0.3rem 0.5rem;" /></div>
+            </div>
+            <button class="btn btn-outline" id="fetch-report-btn">↻ Fetch</button>
+          </div>
+          <button class="btn btn-amber" id="gen-po-btn" title="Draft a PO for all items at or below reorder level">Generate PO from low stock</button>
+        </div>
+        <div id="report-result"><p class="muted">Select a date range and click Fetch.</p></div>
+      </div>
+
+      <!-- ── STAFF REQUESTS TAB ── -->
+      <div id="pane-requests" style="display:none;">
+        <div class="flex-between" style="margin-bottom:0.9rem;flex-wrap:wrap;gap:0.5rem;">
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <label style="font-size:0.88rem;white-space:nowrap;">Date:</label>
+            <input type="date" id="req-date-filter"
+              style="padding:0.3rem 0.55rem;border:1px solid var(--line);border-radius:6px;background:var(--paper-dim);color:var(--ink);" />
+            <button class="btn btn-sm btn-outline" id="req-fetch-btn">↻ Load</button>
+          </div>
+          <button class="btn btn-primary" id="new-req-btn">+ New request</button>
+        </div>
+        <div id="requests-list"><p class="muted">Click Load to see requests for the selected date.</p></div>
+      </div>
+
+      <!-- ── PURCHASE ORDERS TAB ── -->
+      <div id="pane-pos" style="display:none;">
+        <div class="flex-between" style="margin-bottom:0.9rem;flex-wrap:wrap;gap:0.5rem;">
+          <div class="tag-row">
+            <button class="btn btn-sm btn-outline po-fbtn tab-active" data-pf="">All</button>
+            <button class="btn btn-sm btn-outline po-fbtn" data-pf="draft">Draft</button>
+            <button class="btn btn-sm btn-outline po-fbtn" data-pf="sent">Sent</button>
+            <button class="btn btn-sm btn-outline po-fbtn" data-pf="partial">Partial</button>
+            <button class="btn btn-sm btn-outline po-fbtn" data-pf="received">Received</button>
+          </div>
+          <button class="btn btn-primary" id="new-po-btn">+ New PO</button>
+        </div>
+        <div id="po-list"><p class="muted">Loading…</p></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ── MODAL: Add / Edit Item ── -->
+<div id="item-modal" style="display:none;" class="modal-bg">
+  <div class="modal-box">
+    <h3 class="modal-title" id="item-modal-title">Add item</h3>
+    <input type="hidden" id="item-edit-id" />
+    <div class="field-row">
+      <div class="field"><label>Item name *</label><input id="item-name" type="text" placeholder="e.g. Paracetamol 500mg" /></div>
+      <div class="field"><label>Category</label>
+        <select id="item-cat">
+          <option>Medicine</option><option>Consumable</option><option>Equipment</option>
+          <option>Surgical</option><option>Injection</option><option>Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Unit *</label><input id="item-unit" type="text" placeholder="tablets / strips / ml / pcs" /></div>
+      <div class="field"><label>Unit cost (₹)</label><input id="item-cost" type="number" min="0" step="0.01" value="0" inputmode="decimal" /></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Reorder at (qty)</label><input id="item-reorder-at" type="number" min="0" value="10" inputmode="numeric" /></div>
+      <div class="field"><label>Suggest reorder qty</label><input id="item-reorder-qty" type="number" min="1" value="50" inputmode="numeric" /></div>
+    </div>
+    <div class="field" id="item-stock-field">
+      <label>Opening stock</label>
+      <input id="item-stock" type="number" min="0" value="0" inputmode="numeric" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="item-cancel">Cancel</button>
+      <button class="btn btn-primary" id="item-save">Save item</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: Adjust Stock ── -->
+<div id="adjust-modal" style="display:none;" class="modal-bg">
+  <div class="modal-box">
+    <h3 class="modal-title">Adjust stock — <span id="adj-item-name"></span></h3>
+    <input type="hidden" id="adj-item-id" />
+    <p style="margin-bottom:0.9rem;">Current stock: <strong id="adj-current"></strong></p>
+    <div class="field">
+      <label>Adjustment type</label>
+      <select id="adj-type">
+        <option value="add">Add stock (purchase / donation received)</option>
+        <option value="sub">Remove stock (damage / expiry / loss)</option>
+        <option value="set">Set exact count (physical stock count)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label id="adj-qty-label">Quantity to add</label>
+      <input id="adj-qty" type="number" min="0" value="0" inputmode="numeric" />
+    </div>
+    <div class="field"><label>Reason / note (optional)</label><input id="adj-note" type="text" placeholder="e.g. Monthly stock audit" /></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="adj-cancel">Cancel</button>
+      <button class="btn btn-primary" id="adj-save">Apply adjustment</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: New Staff Request ── -->
+<div id="req-modal" style="display:none;" class="modal-bg">
+  <div class="modal-box wide">
+    <h3 class="modal-title">New staff request</h3>
+    <div class="field-row">
+      <div class="field"><label>Staff name *</label><input id="req-staff" type="text" placeholder="Your name" /></div>
+      <div class="field">
+        <label>Load from template (last 10 requests)</label>
+        <select id="req-template"><option value="">— select a previous request —</option></select>
+      </div>
+    </div>
+    <div class="field"><label>Notes / purpose (optional)</label><input id="req-notes" type="text" placeholder="Procedure name, ward, reason…" /></div>
+    <div style="font-weight:600;font-size:0.88rem;color:var(--ink-soft);margin-bottom:0.5rem;">Items to request</div>
+    <div id="req-item-rows"></div>
+    <button class="btn btn-sm btn-outline" id="req-add-row" style="margin-top:0.35rem;">+ Add item</button>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="req-cancel">Cancel</button>
+      <button class="btn btn-primary" id="req-save">Issue request &amp; deduct stock</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: Return Items ── -->
+<div id="return-modal" style="display:none;" class="modal-bg">
+  <div class="modal-box wide">
+    <h3 class="modal-title">Return items — <span id="ret-req-label"></span></h3>
+    <input type="hidden" id="ret-req-id" />
+    <p style="font-size:0.85rem;color:var(--ink-soft);margin-bottom:0.75rem;">Enter the quantity returned for each item. Returned stock will be added back immediately.</p>
+    <div id="ret-item-rows"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="ret-cancel">Cancel</button>
+      <button class="btn btn-primary" id="ret-save">Save returns &amp; update stock</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: New / Edit Purchase Order ── -->
+<div id="po-modal" style="display:none;" class="modal-bg">
+  <div class="modal-box wide">
+    <h3 class="modal-title" id="po-modal-title">New purchase order</h3>
+    <input type="hidden" id="po-edit-id" />
+    <div class="field-row">
+      <div class="field"><label>Supplier / vendor *</label><input id="po-supplier" type="text" placeholder="Supplier name" /></div>
+      <div class="field">
+        <label>Status</label>
+        <select id="po-status">
+          <option value="draft">Draft</option>
+          <option value="sent">Sent to supplier</option>
+        </select>
+      </div>
+    </div>
+    <div class="field"><label>Notes (delivery date, terms, etc.)</label><input id="po-notes" type="text" placeholder="Optional" /></div>
+    <div style="font-weight:600;font-size:0.88rem;color:var(--ink-soft);margin-bottom:0.5rem;">Line items</div>
+    <div id="po-item-rows"></div>
+    <button class="btn btn-sm btn-outline" id="po-add-row" style="margin-top:0.35rem;">+ Add item</button>
+    <p style="text-align:right;margin-top:0.6rem;font-size:0.9rem;">Estimated total: <strong id="po-total-est">₹0.00</strong></p>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="po-cancel">Cancel</button>
+      <button class="btn btn-primary" id="po-save">Save PO</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: Receive PO Items ── -->
+<div id="recv-modal" style="display:none;" class="modal-bg">
+  <div class="modal-box wide">
+    <h3 class="modal-title">Receive items — <span id="recv-po-label"></span></h3>
+    <input type="hidden" id="recv-po-id" />
+    <p style="font-size:0.85rem;color:var(--ink-soft);margin-bottom:0.75rem;">Enter the quantity actually received for each line item. Stock is updated immediately.</p>
+    <div id="recv-item-rows"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="recv-cancel">Cancel</button>
+      <button class="btn btn-primary" id="recv-save">Update stock from PO</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import {
+  auth, authReady, db, onAuthStateChanged, signOut,
+  collection, addDoc, doc, updateDoc, getDoc, getDocs, onSnapshot,
+  query, where, orderBy, limit, runTransaction, serverTimestamp
+} from "./js/firebase-config.js";
+import { applyClinicBranding, todayKey } from "./js/queue-logic.js";
+import { attachThemeToggle } from "./js/theme.js";
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+await authReady;
+const user = auth.currentUser;
+if (!user) { window.location.href = "index.html"; }
+document.getElementById("user-email").textContent = user.email;
+document.getElementById("logout-btn").onclick = () =>
+  signOut(auth).then(() => { window.location.href = "index.html"; });
+attachThemeToggle();
+applyClinicBranding(db);
+
+// Update nav based on role
+const userSnap = await getDoc(doc(db, "users", user.uid));
+if (userSnap.exists()) {
+  const role = userSnap.data().role;
+  const nav = document.getElementById("nav-links");
+  if (role === "doctor") {
+    nav.innerHTML = `<a href="doctor.html">My Queue</a><a href="patients.html">Patients</a><a href="billing.html">Billing</a><a href="inventory.html" class="active">Inventory</a><a href="board.html">Queue Board</a>`;
+  } else if (role === "admin") {
+    nav.innerHTML = `<a href="admin.html">Admin Setup</a><a href="backup.html">Backup</a><a href="reception.html">Reception</a><a href="patients.html">Patients</a><a href="billing.html">Billing</a><a href="inventory.html" class="active">Inventory</a><a href="board.html">Queue Board</a>`;
+  }
+}
+
+const el = (id) => document.getElementById(id);
+
+// ── Global state ──────────────────────────────────────────────────────────────
+let allItems = [];
+let allPOs   = [];
+let reqTemplates = [];
+let poFilter = "";
+
+// ── Live inventory listener ───────────────────────────────────────────────────
+const invRef = collection(db, "inventory");
+onSnapshot(query(invRef, orderBy("name")), (snap) => {
+  allItems = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderStockTable();
+  updateLowStockBar();
+  refreshCategoryFilter();
+});
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+const TABS = ["stock", "reports", "requests", "pos"];
+function switchTab(name) {
+  TABS.forEach(t => {
+    el(`tab-${t}`).classList.toggle("tab-active", t === name);
+    el(`pane-${t}`).style.display = t === name ? "" : "none";
+  });
+  if (name === "pos") loadPOs();
+  if (name === "requests" && !el("req-date-filter").value) {
+    el("req-date-filter").value = todayKey();
+  }
+}
+TABS.forEach(t => el(`tab-${t}`).onclick = () => switchTab(t));
+
+// ── Category filter ───────────────────────────────────────────────────────────
+function refreshCategoryFilter() {
+  const cats = [...new Set(allItems.map(i => i.category || "Other"))].sort();
+  const sel = el("cat-filter");
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">All categories</option>' +
+    cats.map(c => `<option${c === cur ? " selected" : ""}>${esc(c)}</option>`).join("");
+}
+
+// ── Low-stock alert bar ───────────────────────────────────────────────────────
+function updateLowStockBar() {
+  const low = allItems.filter(i => (i.currentStock ?? 0) <= (i.reorderLevel ?? 0));
+  const bar = el("low-stock-bar");
+  if (low.length === 0) { bar.style.display = "none"; return; }
+  bar.style.display = "flex";
+  el("low-stock-msg").textContent =
+    `${low.length} item${low.length > 1 ? "s" : ""} at or below reorder level.`;
+}
+el("low-stock-link").onclick = (e) => {
+  e.preventDefault();
+  switchTab("stock");
+  el("low-only").checked = true;
+  renderStockTable();
+};
+
+// ── STOCK TAB ─────────────────────────────────────────────────────────────────
+function stockBadge(item) {
+  const s = item.currentStock ?? 0;
+  const r = item.reorderLevel ?? 0;
+  if (s === 0) return `<span class="stkbadge stkbadge-out">Out of stock</span>`;
+  if (s <= r)  return `<span class="stkbadge stkbadge-low">Low</span>`;
+  return `<span class="stkbadge stkbadge-ok">OK</span>`;
+}
+function rowClass(item) {
+  const s = item.currentStock ?? 0;
+  const r = item.reorderLevel ?? 0;
+  if (s === 0) return "row-out";
+  if (s <= r)  return "row-low";
+  return "";
+}
+function renderStockTable() {
+  const search  = (el("item-search").value || "").toLowerCase();
+  const cat     = el("cat-filter").value;
+  const lowOnly = el("low-only").checked;
+  const rows = allItems.filter(i => {
+    if (search && !(i.name || "").toLowerCase().includes(search)) return false;
+    if (cat && i.category !== cat) return false;
+    if (lowOnly && (i.currentStock ?? 0) > (i.reorderLevel ?? 0)) return false;
+    return true;
+  });
+  if (rows.length === 0) {
+    el("stock-tbody").innerHTML =
+      `<tr><td colspan="8" class="muted" style="padding:1.2rem;text-align:center;">${allItems.length === 0 ? "No items added yet. Click "+ Add item" to get started." : "No items match the current filter."}</td></tr>`;
+    return;
+  }
+  el("stock-tbody").innerHTML = rows.map(item => `
+    <tr class="${rowClass(item)}">
+      <td><strong>${esc(item.name)}</strong></td>
+      <td>${esc(item.category || "—")}</td>
+      <td>${esc(item.unit || "—")}</td>
+      <td><strong>${item.currentStock ?? 0}</strong></td>
+      <td>${item.reorderLevel ?? 0}</td>
+      <td>₹${Number(item.unitCost || 0).toFixed(2)}</td>
+      <td>${stockBadge(item)}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-sm btn-outline" data-edit="${item.id}" style="margin-right:0.3rem;">Edit</button>
+        <button class="btn btn-sm btn-vitals-pending" data-adjust="${item.id}">Adjust</button>
+      </td>
+    </tr>`).join("");
+}
+el("item-search").oninput = renderStockTable;
+el("cat-filter").onchange = renderStockTable;
+el("low-only").onchange   = renderStockTable;
+el("stock-tbody").addEventListener("click", (e) => {
+  if (e.target.dataset.edit)   openItemModal(allItems.find(i => i.id === e.target.dataset.edit));
+  if (e.target.dataset.adjust) openAdjustModal(allItems.find(i => i.id === e.target.dataset.adjust));
+});
+
+// ── Add / Edit Item modal ─────────────────────────────────────────────────────
+el("add-item-btn").onclick = () => openItemModal(null);
+function openItemModal(item) {
+  el("item-modal-title").textContent = item ? "Edit item" : "Add item";
+  el("item-edit-id").value     = item?.id || "";
+  el("item-name").value        = item?.name || "";
+  el("item-cat").value         = item?.category || "Medicine";
+  el("item-unit").value        = item?.unit || "";
+  el("item-cost").value        = item?.unitCost || 0;
+  el("item-reorder-at").value  = item?.reorderLevel ?? 10;
+  el("item-reorder-qty").value = item?.reorderQty ?? 50;
+  el("item-stock").value       = item?.currentStock || 0;
+  el("item-stock-field").style.display = item ? "none" : "";
+  el("item-modal").style.display = "flex";
+}
+el("item-cancel").onclick = () => el("item-modal").style.display = "none";
+el("item-save").onclick = async () => {
+  const name = el("item-name").value.trim();
+  if (!name) { alert("Item name is required."); return; }
+  const data = {
+    name,
+    category:     el("item-cat").value,
+    unit:         el("item-unit").value.trim() || "pcs",
+    unitCost:     Number(el("item-cost").value) || 0,
+    reorderLevel: Number(el("item-reorder-at").value) || 0,
+    reorderQty:   Number(el("item-reorder-qty").value) || 1,
+    updatedAt:    serverTimestamp(),
+  };
+  const editId = el("item-edit-id").value;
+  try {
+    if (editId) {
+      await updateDoc(doc(db, "inventory", editId), data);
+    } else {
+      data.currentStock = Number(el("item-stock").value) || 0;
+      data.createdAt    = serverTimestamp();
+      await addDoc(invRef, data);
+    }
+    el("item-modal").style.display = "none";
+  } catch (e) { alert("Save failed: " + e.message); }
+};
+
+// ── Adjust Stock modal ────────────────────────────────────────────────────────
+function openAdjustModal(item) {
+  if (!item) return;
+  el("adj-item-name").textContent = item.name;
+  el("adj-item-id").value = item.id;
+  el("adj-current").textContent = item.currentStock ?? 0;
+  el("adj-qty").value   = 0;
+  el("adj-note").value  = "";
+  el("adj-type").value  = "add";
+  el("adj-qty-label").textContent = "Quantity to add";
+  el("adjust-modal").style.display = "flex";
+}
+el("adj-type").onchange = () => {
+  const t = el("adj-type").value;
+  el("adj-qty-label").textContent =
+    t === "set" ? "New stock count" : t === "add" ? "Quantity to add" : "Quantity to remove";
+};
+el("adj-cancel").onclick = () => el("adjust-modal").style.display = "none";
+el("adj-save").onclick = async () => {
+  const itemId = el("adj-item-id").value;
+  const adjType = el("adj-type").value;
+  const adjQty  = Number(el("adj-qty").value);
+  const note    = el("adj-note").value.trim();
+  if (isNaN(adjQty) || adjQty < 0) { alert("Enter a valid quantity."); return; }
+  try {
+    await runTransaction(db, async (tx) => {
+      const ref  = doc(db, "inventory", itemId);
+      const snap = await tx.get(ref);
+      const cur  = snap.data().currentStock ?? 0;
+      let newStock, movQty, movType;
+      if (adjType === "add") {
+        newStock = cur + adjQty; movQty = adjQty; movType = "in_adjustment";
+      } else if (adjType === "sub") {
+        newStock = Math.max(0, cur - adjQty); movQty = -(cur - newStock); movType = "out_adjustment";
+      } else {
+        newStock = adjQty; movQty = adjQty - cur; movType = "adjustment";
+      }
+      tx.update(ref, { currentStock: newStock, updatedAt: serverTimestamp() });
+      const movRef = doc(collection(db, "stockMovements"));
+      tx.set(movRef, {
+        itemId, itemName: snap.data().name, type: movType,
+        qty: movQty, balanceAfter: newStock,
+        note: note || null, date: todayKey(), createdAt: serverTimestamp(),
+      });
+    });
+    el("adjust-modal").style.display = "none";
+  } catch (e) { alert("Adjust failed: " + e.message); }
+};
+
+// ── REPORTS TAB ───────────────────────────────────────────────────────────────
+function setRptDates(from, to) { el("rpt-from").value = from; el("rpt-to").value = to; }
+document.querySelectorAll("[data-rpreset]").forEach(btn => btn.onclick = () => {
+  const p = btn.dataset.rpreset;
+  const today = todayKey();
+  if (p === "today")     { setRptDates(today, today); }
+  if (p === "yesterday") { const d = new Date(); d.setDate(d.getDate()-1); const y=d.toISOString().slice(0,10); setRptDates(y,y); }
+  if (p === "last7")     { const d = new Date(); d.setDate(d.getDate()-6); setRptDates(d.toISOString().slice(0,10), today); }
+  if (p === "thismonth") { const d = new Date(); setRptDates(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`, today); }
+  fetchReport();
+});
+el("fetch-report-btn").onclick = fetchReport;
+
+async function fetchReport() {
+  const from = el("rpt-from").value, to = el("rpt-to").value;
+  if (!from || !to) { alert("Select a date range."); return; }
+  el("report-result").innerHTML = `<p class="muted">Loading…</p>`;
+  try {
+    const snap = await getDocs(query(
+      collection(db, "stockMovements"),
+      where("date", ">=", from), where("date", "<=", to),
+      orderBy("date", "asc")
+    ));
+    renderReport(snap.docs.map(d => ({ id: d.id, ...d.data() })), from, to);
+  } catch (e) {
+    el("report-result").innerHTML = `<p class="muted" style="color:var(--clay-500);">Error: ${e.message}</p>`;
+  }
+}
+
+function movLabel(type) {
+  return { out_patient:"Patient dispense", out_request:"Staff issue", in_po:"PO receive",
+    in_return:"Staff return", in_adjustment:"Stock add", out_adjustment:"Stock remove",
+    adjustment:"Stock count" }[type] || type;
+}
+function movBadge(type) {
+  if (type === "out_patient" || type === "out_request" || type === "out_adjustment")
+    return "stkbadge-low";
+  if (type.startsWith("in"))
+    return "stkbadge-in";
+  return "stkbadge-out";
+}
+
+function renderReport(movements, from, to) {
+  if (movements.length === 0) {
+    el("report-result").innerHTML = `<p class="muted">No stock movements for ${from === to ? from : `${from} – ${to}`}.</p>`;
+    return;
+  }
+  // Aggregate per item
+  const byItem = {};
+  movements.forEach(m => {
+    if (!byItem[m.itemId]) byItem[m.itemId] = { name: m.itemName, patient:0, staff:0, received:0, adj:0, value:0 };
+    const entry = byItem[m.itemId];
+    if (m.type === "out_patient")    { entry.patient += Math.abs(m.qty); }
+    else if (m.type === "out_request") { entry.staff += Math.abs(m.qty); }
+    else if (m.type.startsWith("in")) { entry.received += Math.abs(m.qty); }
+    else                               { entry.adj += m.qty; }
+    const item = allItems.find(i => i.id === m.itemId);
+    if (item && m.qty < 0) entry.value += Math.abs(m.qty) * (item.unitCost || 0);
+  });
+  const totPatient = movements.filter(m=>m.type==="out_patient").reduce((s,m)=>s+Math.abs(m.qty),0);
+  const totStaff   = movements.filter(m=>m.type==="out_request").reduce((s,m)=>s+Math.abs(m.qty),0);
+  const totValue   = Object.values(byItem).reduce((s,v)=>s+v.value,0);
+
+  el("report-result").innerHTML = `
+    <div class="grid-3" style="gap:0.75rem;margin-bottom:1.2rem;">
+      <div class="card" style="padding:0.75rem 1rem;margin-bottom:0;">
+        <div class="small muted">Dispensed to patients</div>
+        <div style="font-size:1.4rem;font-weight:700;color:var(--clay-500);">${totPatient}</div>
+      </div>
+      <div class="card" style="padding:0.75rem 1rem;margin-bottom:0;">
+        <div class="small muted">Issued to staff</div>
+        <div style="font-size:1.4rem;font-weight:700;color:var(--amber-700);">${totStaff}</div>
+      </div>
+      <div class="card" style="padding:0.75rem 1rem;margin-bottom:0;">
+        <div class="small muted">Est. value dispensed</div>
+        <div style="font-size:1.4rem;font-weight:700;color:var(--teal-900);">₹${totValue.toFixed(2)}</div>
+      </div>
+    </div>
+    <h4 style="margin:0 0 0.5rem;">Usage by item</h4>
+    <div style="overflow-x:auto;margin-bottom:1.25rem;">
+      <table class="inv-table">
+        <thead><tr><th>Item</th><th>Patient dispense</th><th>Staff issue</th><th>Received</th><th>Adjustments</th><th>Est. value</th></tr></thead>
+        <tbody>${Object.entries(byItem).map(([,v]) => `
+          <tr>
+            <td><strong>${esc(v.name)}</strong></td>
+            <td>${v.patient||"—"}</td><td>${v.staff||"—"}</td>
+            <td>${v.received||"—"}</td><td>${v.adj||"—"}</td>
+            <td>₹${v.value.toFixed(2)}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+    <h4 style="margin:0 0 0.5rem;">Movement log</h4>
+    <div style="overflow-x:auto;">
+      <table class="inv-table">
+        <thead><tr><th>Date</th><th>Item</th><th>Type</th><th>Qty</th><th>Balance after</th><th>Reference</th></tr></thead>
+        <tbody>${movements.map(m => `
+          <tr>
+            <td style="white-space:nowrap;">${m.date}</td>
+            <td>${esc(m.itemName || "—")}</td>
+            <td><span class="stkbadge ${movBadge(m.type)}">${movLabel(m.type)}</span></td>
+            <td style="font-weight:600;color:${m.qty < 0 ? "var(--clay-500)" : "var(--sage-700)"};">${m.qty > 0 ? "+" : ""}${m.qty}</td>
+            <td>${m.balanceAfter ?? "—"}</td>
+            <td class="small muted">${esc(m.patientName || m.staffName || m.note || m.poNumber || "")}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// Generate PO from low-stock items
+el("gen-po-btn").onclick = () => {
+  const lowItems = allItems.filter(i => (i.currentStock ?? 0) <= (i.reorderLevel ?? 0) && i.reorderQty > 0);
+  if (lowItems.length === 0) { alert("No items are currently at or below their reorder level."); return; }
+  openPOModal(null, lowItems.map(i => ({ itemId: i.id, itemName: i.name, unit: i.unit, qty: i.reorderQty, unitCost: i.unitCost || 0 })));
+  switchTab("pos");
+};
+
+// ── STAFF REQUESTS TAB ────────────────────────────────────────────────────────
+el("req-date-filter").value = todayKey();
+el("req-fetch-btn").onclick = loadRequests;
+el("new-req-btn").onclick   = () => openRequestModal();
+
+async function loadRequests() {
+  const date = el("req-date-filter").value;
+  if (!date) return;
+  el("requests-list").innerHTML = `<p class="muted">Loading…</p>`;
+  try {
+    const snap = await getDocs(query(
+      collection(db, "staffRequests"),
+      where("date", "==", date), orderBy("requestedAt", "desc")
+    ));
+    renderRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  } catch (e) {
+    el("requests-list").innerHTML = `<p class="muted" style="color:var(--clay-500);">Error: ${e.message}</p>`;
+  }
+}
+function renderRequests(reqs) {
+  if (reqs.length === 0) {
+    el("requests-list").innerHTML = `<p class="muted">No staff requests for this date.</p>`; return;
+  }
+  el("requests-list").innerHTML = reqs.map(r => {
+    const isOpen = r.status === "open" || r.status === "partial_return";
+    const statusLabel = { open: "Open", partial_return: "Partial return", closed: "Closed" }[r.status] || r.status;
+    const statusBadge = isOpen ? (r.status === "open" ? "badge-waiting" : "badge-called") : "badge-completed";
+    const requestedAt = r.requestedAt?.toDate?.();
+    return `<div class="req-card ${r.status === "closed" ? "closed" : isOpen && r.status === "partial_return" ? "partial" : "open"}" data-req-id="${r.id}">
+      <div class="flex-between" style="margin-bottom:0.4rem;flex-wrap:wrap;gap:0.3rem;">
+        <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+          <strong>${esc(r.requestNumber)}</strong>
+          <span class="badge ${statusBadge}">${statusLabel}</span>
+          ${r.staffName ? `<span class="small muted">${esc(r.staffName)}</span>` : ""}
+        </div>
+        <span class="small muted">${requestedAt ? requestedAt.toLocaleTimeString() : ""}</span>
+      </div>
+      ${r.notes ? `<p class="small muted" style="margin:0 0 0.4rem;">${esc(r.notes)}</p>` : ""}
+      <table class="items-sub">
+        <thead><tr><th>Item</th><th>Issued</th><th>Returned</th><th>Net out</th></tr></thead>
+        <tbody>${(r.items || []).map(i => `
+          <tr>
+            <td>${esc(i.itemName)}</td>
+            <td>${i.requestedQty}</td>
+            <td>${i.returnedQty || 0}</td>
+            <td style="font-weight:600;">${i.requestedQty - (i.returnedQty || 0)}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+      ${isOpen ? `<div style="margin-top:0.6rem;"><button class="btn btn-sm btn-amber" data-ret-req="${r.id}">Add return</button></div>` : ""}
+    </div>`;
+  }).join("");
+}
+
+el("requests-list").addEventListener("click", async (e) => {
+  const reqId = e.target.dataset.retReq;
+  if (!reqId) return;
+  const snap = await getDoc(doc(db, "staffRequests", reqId));
+  if (snap.exists()) openReturnModal({ id: snap.id, ...snap.data() });
+});
+
+// ── New Request Modal ─────────────────────────────────────────────────────────
+async function openRequestModal(prefillItems) {
+  el("req-staff").value = "";
+  el("req-notes").value = "";
+  el("req-item-rows").innerHTML = "";
+  // Load last 10 requests as templates
+  try {
+    const snap = await getDocs(query(collection(db, "staffRequests"), orderBy("requestedAt", "desc"), limit(10)));
+    reqTemplates = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (_) { reqTemplates = []; }
+  el("req-template").innerHTML = '<option value="">— select a previous request as template —</option>' +
+    reqTemplates.map((r, i) =>
+      `<option value="${i}">${esc(r.requestNumber)} · ${esc(r.staffName || "")} — ${(r.items||[]).map(it=>esc(it.itemName)).join(", ")}</option>`
+    ).join("");
+  if (prefillItems) prefillItems.forEach(addReqRow);
+  else addReqRow();
+  el("req-modal").style.display = "flex";
+}
+el("req-template").onchange = () => {
+  const idx = el("req-template").value;
+  if (idx === "") return;
+  const tpl = reqTemplates[Number(idx)];
+  if (!tpl) return;
+  el("req-staff").value = tpl.staffName || "";
+  el("req-notes").value = tpl.notes || "";
+  el("req-item-rows").innerHTML = "";
+  (tpl.items || []).forEach(i => addReqRow({ itemId: i.itemId, itemName: i.itemName, qty: i.requestedQty }));
+};
+function addReqRow(prefill) {
+  const div = document.createElement("div");
+  div.className = "line-item-row";
+  const itemOpts = allItems.map(i =>
+    `<option value="${i.id}" data-unit="${esc(i.unit || "pcs")}"${prefill?.itemId === i.id ? " selected" : ""}>${esc(i.name)} (${i.currentStock ?? 0} ${esc(i.unit || "pcs")})</option>`
+  ).join("");
+  div.innerHTML = `
+    <select class="req-item-sel" style="width:100%;font-size:0.85rem;">${itemOpts}</select>
+    <input class="req-qty" type="number" min="1" value="${prefill?.qty || 1}" inputmode="numeric" style="width:100%;" />
+    <span class="req-unit small muted" style="text-align:center;"></span>
+    <button type="button" class="btn btn-sm btn-danger" title="Remove">✕</button>`;
+  div.querySelector("button").onclick = () => div.remove();
+  const sel = div.querySelector(".req-item-sel");
+  const unitSpan = div.querySelector(".req-unit");
+  const setUnit = () => { unitSpan.textContent = sel.selectedOptions[0]?.dataset.unit || "pcs"; };
+  sel.onchange = setUnit; setUnit();
+  el("req-item-rows").appendChild(div);
+}
+el("req-add-row").onclick = () => addReqRow();
+el("req-cancel").onclick = () => el("req-modal").style.display = "none";
+el("req-save").onclick = async () => {
+  const staffName = el("req-staff").value.trim();
+  if (!staffName) { alert("Enter staff name."); return; }
+  const rows  = [...el("req-item-rows").querySelectorAll(".line-item-row")];
+  const items = rows.map(r => ({
+    itemId:       r.querySelector(".req-item-sel").value,
+    itemName:     r.querySelector(".req-item-sel").selectedOptions[0]?.text.split(" (")[0] || "",
+    requestedQty: Number(r.querySelector(".req-qty").value) || 1,
+    returnedQty:  0,
+  })).filter(i => i.itemId && i.requestedQty > 0);
+  if (items.length === 0) { alert("Add at least one item."); return; }
+  el("req-save").disabled = true;
+  el("req-save").textContent = "Saving…";
+  try {
+    await runTransaction(db, async (tx) => {
+      const refs  = items.map(i => doc(db, "inventory", i.itemId));
+      const snaps = await Promise.all(refs.map(r => tx.get(r)));
+      snaps.forEach((snap, idx) => {
+        const avail = snap.data()?.currentStock ?? 0;
+        if (avail < items[idx].requestedQty)
+          throw new Error(`Insufficient stock for "${items[idx].itemName}" (available: ${avail})`);
+      });
+      const reqRef = doc(collection(db, "staffRequests"));
+      const reqNum = `REQ-${Date.now()}`;
+      tx.set(reqRef, {
+        requestNumber: reqNum, staffName,
+        notes:  el("req-notes").value.trim() || null,
+        status: "open", date: todayKey(), items,
+        requestedAt: serverTimestamp(),
+      });
+      snaps.forEach((snap, idx) => {
+        const newStock = (snap.data().currentStock ?? 0) - items[idx].requestedQty;
+        tx.update(refs[idx], { currentStock: newStock, updatedAt: serverTimestamp() });
+        const movRef = doc(collection(db, "stockMovements"));
+        tx.set(movRef, {
+          itemId: items[idx].itemId, itemName: items[idx].itemName,
+          type: "out_request", qty: -items[idx].requestedQty, balanceAfter: newStock,
+          requestId: reqRef.id, requestNumber: reqNum, staffName,
+          date: todayKey(), createdAt: serverTimestamp(),
+        });
+      });
+    });
+    el("req-modal").style.display = "none";
+    loadRequests();
+  } catch (e) {
+    alert("Failed: " + e.message);
+  } finally {
+    el("req-save").disabled = false;
+    el("req-save").textContent = "Issue request & deduct stock";
+  }
+};
+
+// ── Return Items Modal ────────────────────────────────────────────────────────
+function openReturnModal(req) {
+  el("ret-req-label").textContent = req.requestNumber || "";
+  el("ret-req-id").value = req.id;
+  el("ret-item-rows").innerHTML = (req.items || []).map((item, idx) => {
+    const maxReturn = item.requestedQty - (item.returnedQty || 0);
+    return `<div class="line-item-row" style="grid-template-columns:1fr 90px 80px;margin-bottom:0.5rem;">
+      <div>
+        <strong>${esc(item.itemName)}</strong>
+        <div class="small muted">Issued: ${item.requestedQty} · Returned so far: ${item.returnedQty || 0} · Remaining: ${maxReturn}</div>
+      </div>
+      <input class="ret-qty" type="number" min="0" max="${maxReturn}" value="${maxReturn}"
+        data-idx="${idx}" data-item-id="${item.itemId}" data-item-name="${esc(item.itemName)}"
+        inputmode="numeric" style="width:100%;" />
+      <span class="small muted">${esc(item.unit || "pcs")}</span>
+    </div>`;
+  }).join("");
+  el("return-modal").style.display = "flex";
+}
+el("ret-cancel").onclick = () => el("return-modal").style.display = "none";
+el("ret-save").onclick = async () => {
+  const reqId      = el("ret-req-id").value;
+  const qtyInputs  = [...el("ret-item-rows").querySelectorAll(".ret-qty")];
+  const returns    = qtyInputs.map(inp => ({
+    idx:       Number(inp.dataset.idx),
+    itemId:    inp.dataset.itemId,
+    itemName:  inp.dataset.itemName,
+    returnQty: Number(inp.value) || 0,
+  })).filter(r => r.returnQty > 0);
+  if (returns.length === 0) { alert("Enter at least one returned quantity."); return; }
+  el("ret-save").disabled = true;
+  el("ret-save").textContent = "Saving…";
+  try {
+    const reqSnap = await getDoc(doc(db, "staffRequests", reqId));
+    const reqData = reqSnap.data();
+    await runTransaction(db, async (tx) => {
+      const refs  = returns.map(r => doc(db, "inventory", r.itemId));
+      const snaps = await Promise.all(refs.map(r => tx.get(r)));
+      const updatedItems = [...reqData.items];
+      snaps.forEach((snap, i) => {
+        const recv = returns[i];
+        const newStock = (snap.data().currentStock ?? 0) + recv.returnQty;
+        tx.update(refs[i], { currentStock: newStock, updatedAt: serverTimestamp() });
+        const movRef = doc(collection(db, "stockMovements"));
+        tx.set(movRef, {
+          itemId: recv.itemId, itemName: recv.itemName, type: "in_return",
+          qty: recv.returnQty, balanceAfter: newStock,
+          requestId: reqId, requestNumber: reqData.requestNumber,
+          staffName: reqData.staffName, date: todayKey(), createdAt: serverTimestamp(),
+        });
+        updatedItems[recv.idx] = {
+          ...updatedItems[recv.idx],
+          returnedQty: (updatedItems[recv.idx].returnedQty || 0) + recv.returnQty,
+        };
+      });
+      const allClosed = updatedItems.every(i => (i.returnedQty || 0) >= i.requestedQty);
+      tx.update(doc(db, "staffRequests", reqId), {
+        items: updatedItems,
+        status: allClosed ? "closed" : "partial_return",
+        ...(allClosed ? { closedAt: serverTimestamp() } : {}),
+      });
+    });
+    el("return-modal").style.display = "none";
+    loadRequests();
+  } catch (e) {
+    alert("Failed: " + e.message);
+  } finally {
+    el("ret-save").disabled = false;
+    el("ret-save").textContent = "Save returns & update stock";
+  }
+};
+
+// ── PURCHASE ORDERS TAB ───────────────────────────────────────────────────────
+document.querySelectorAll(".po-fbtn").forEach(btn => btn.onclick = () => {
+  poFilter = btn.dataset.pf;
+  document.querySelectorAll(".po-fbtn").forEach(b => b.classList.remove("tab-active"));
+  btn.classList.add("tab-active");
+  renderPOs();
+});
+async function loadPOs() {
+  el("po-list").innerHTML = `<p class="muted">Loading…</p>`;
+  try {
+    const snap = await getDocs(query(collection(db, "purchaseOrders"), orderBy("createdAt", "desc"), limit(60)));
+    allPOs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderPOs();
+  } catch (e) {
+    el("po-list").innerHTML = `<p class="muted" style="color:var(--clay-500);">Error: ${e.message}</p>`;
+  }
+}
+const PO_STATUS = { draft:"Draft", sent:"Sent to supplier", partial:"Partially received", received:"Fully received" };
+const PO_BADGE  = { draft:"badge-in_consultation", sent:"badge-waiting", partial:"badge-called", received:"badge-completed" };
+function renderPOs() {
+  const filtered = poFilter ? allPOs.filter(p => p.status === poFilter) : allPOs;
+  if (filtered.length === 0) {
+    el("po-list").innerHTML = `<p class="muted">${allPOs.length === 0 ? "No purchase orders yet." : "No POs match this filter."}</p>`;
+    return;
+  }
+  el("po-list").innerHTML = filtered.map(po => {
+    const canReceive = po.status === "draft" || po.status === "sent" || po.status === "partial";
+    const total = (po.items || []).reduce((s, i) => s + (i.qty || 0) * (i.unitCost || 0), 0);
+    const createdAt = po.createdAt?.toDate?.();
+    return `<div class="po-card ${po.status || "draft"}">
+      <div class="flex-between" style="margin-bottom:0.4rem;flex-wrap:wrap;gap:0.3rem;">
+        <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+          <strong>${esc(po.poNumber || "—")}</strong>
+          <span class="badge ${PO_BADGE[po.status] || "badge-waiting"}">${PO_STATUS[po.status] || po.status}</span>
+        </div>
+        <span class="small muted">${createdAt ? createdAt.toLocaleDateString() : ""}</span>
+      </div>
+      <div class="small muted" style="margin-bottom:0.4rem;">
+        Supplier: <strong>${esc(po.supplier || "—")}</strong> ·
+        ${(po.items || []).length} item${(po.items||[]).length !== 1 ? "s" : ""} ·
+        Est. ₹${total.toFixed(2)}
+      </div>
+      <table class="items-sub" style="margin-bottom:0.5rem;">
+        <thead><tr><th>Item</th><th>Ordered</th><th>Received</th><th>Unit cost</th></tr></thead>
+        <tbody>${(po.items || []).map(i => `
+          <tr>
+            <td>${esc(i.itemName)}</td>
+            <td>${i.qty}</td>
+            <td>${i.receivedQty || 0}</td>
+            <td>₹${Number(i.unitCost || 0).toFixed(2)}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+      ${po.notes ? `<p class="small muted" style="margin:0 0 0.4rem;">${esc(po.notes)}</p>` : ""}
+      <div style="display:flex;gap:0.5rem;">
+        <button class="btn btn-sm btn-outline" data-po-edit="${po.id}">Edit</button>
+        ${canReceive ? `<button class="btn btn-sm btn-amber" data-po-recv="${po.id}">Receive items</button>` : ""}
+      </div>
+    </div>`;
+  }).join("");
+}
+el("po-list").addEventListener("click", (e) => {
+  const editId = e.target.dataset.poEdit;
+  const recvId = e.target.dataset.poRecv;
+  if (editId) openPOModal(allPOs.find(p => p.id === editId));
+  if (recvId) openReceiveModal(allPOs.find(p => p.id === recvId));
+});
+
+// ── New / Edit PO Modal ───────────────────────────────────────────────────────
+el("new-po-btn").onclick = () => openPOModal(null);
+function openPOModal(po, prefillItems) {
+  el("po-modal-title").textContent = po ? "Edit purchase order" : "New purchase order";
+  el("po-edit-id").value  = po?.id || "";
+  el("po-supplier").value = po?.supplier || "";
+  el("po-notes").value    = po?.notes || "";
+  el("po-status").value   = po?.status || "draft";
+  el("po-item-rows").innerHTML = "";
+  const items = po?.items || prefillItems || [];
+  if (items.length > 0) items.forEach(addPORow);
+  else addPORow();
+  updatePOTotal();
+  el("po-modal").style.display = "flex";
+}
+function addPORow(prefill) {
+  const div = document.createElement("div");
+  div.className = "line-item-row";
+  div.style.gridTemplateColumns = "1fr 80px 90px 28px";
+  const itemOpts = allItems.map(i =>
+    `<option value="${i.id}" data-cost="${i.unitCost || 0}"${prefill?.itemId === i.id ? " selected" : ""}>${esc(i.name)}</option>`
+  ).join("");
+  div.innerHTML = `
+    <select class="po-item-sel" style="width:100%;font-size:0.85rem;">${itemOpts}</select>
+    <input class="po-qty"  type="number" min="1" value="${prefill?.qty || 1}" inputmode="numeric" style="width:100%;" placeholder="Qty" />
+    <input class="po-cost" type="number" min="0" step="0.01" value="${prefill?.unitCost !== undefined ? prefill.unitCost : 0}" inputmode="decimal" style="width:100%;" placeholder="₹/unit" />
+    <button type="button" class="btn btn-sm btn-danger" title="Remove">✕</button>`;
+  div.querySelector("button").onclick = () => { div.remove(); updatePOTotal(); };
+  const sel  = div.querySelector(".po-item-sel");
+  const cost = div.querySelector(".po-cost");
+  sel.onchange = () => { cost.value = sel.selectedOptions[0]?.dataset.cost || 0; updatePOTotal(); };
+  div.querySelector(".po-qty").oninput  = updatePOTotal;
+  cost.oninput = updatePOTotal;
+  el("po-item-rows").appendChild(div);
+}
+el("po-add-row").onclick = () => addPORow();
+function updatePOTotal() {
+  let total = 0;
+  el("po-item-rows").querySelectorAll(".line-item-row").forEach(row => {
+    total += (Number(row.querySelector(".po-qty").value) || 0) *
+             (Number(row.querySelector(".po-cost").value) || 0);
+  });
+  el("po-total-est").textContent = `₹${total.toFixed(2)}`;
+}
+el("po-cancel").onclick = () => el("po-modal").style.display = "none";
+el("po-save").onclick = async () => {
+  const supplier = el("po-supplier").value.trim();
+  if (!supplier) { alert("Enter supplier name."); return; }
+  const rows  = [...el("po-item-rows").querySelectorAll(".line-item-row")];
+  const items = rows.map(r => ({
+    itemId:     r.querySelector(".po-item-sel").value,
+    itemName:   r.querySelector(".po-item-sel").selectedOptions[0]?.text || "",
+    qty:        Number(r.querySelector(".po-qty").value) || 1,
+    unitCost:   Number(r.querySelector(".po-cost").value) || 0,
+    receivedQty: 0,
+  })).filter(i => i.itemId);
+  if (items.length === 0) { alert("Add at least one item."); return; }
+  const editId = el("po-edit-id").value;
+  const data = {
+    supplier, items,
+    notes: el("po-notes").value.trim() || null,
+    status: el("po-status").value,
+    updatedAt: serverTimestamp(),
+  };
+  try {
+    if (editId) {
+      await updateDoc(doc(db, "purchaseOrders", editId), data);
+    } else {
+      data.poNumber  = `PO-${Date.now()}`;
+      data.createdAt = serverTimestamp();
+      await addDoc(collection(db, "purchaseOrders"), data);
+    }
+    el("po-modal").style.display = "none";
+    loadPOs();
+  } catch (e) { alert("Save failed: " + e.message); }
+};
+
+// ── Receive PO Modal ──────────────────────────────────────────────────────────
+function openReceiveModal(po) {
+  if (!po) return;
+  el("recv-po-label").textContent = po.poNumber || "";
+  el("recv-po-id").value = po.id;
+  el("recv-item-rows").innerHTML = (po.items || []).map((item, idx) => {
+    const remaining = (item.qty || 0) - (item.receivedQty || 0);
+    return `<div style="display:grid;grid-template-columns:1fr 90px 100px;gap:0.4rem;align-items:center;margin-bottom:0.5rem;">
+      <div>
+        <strong>${esc(item.itemName)}</strong>
+        <div class="small muted">Ordered: ${item.qty} · Received so far: ${item.receivedQty || 0} · Remaining: ${remaining}</div>
+      </div>
+      <input class="recv-qty" type="number" min="0" max="${remaining}" value="${remaining}"
+        data-idx="${idx}" data-item-id="${item.itemId}" data-item-name="${esc(item.itemName)}"
+        inputmode="numeric" style="width:100%;" />
+      <span class="small muted">of ${remaining} rem.</span>
+    </div>`;
+  }).join("");
+  el("recv-modal").style.display = "flex";
+}
+el("recv-cancel").onclick = () => el("recv-modal").style.display = "none";
+el("recv-save").onclick = async () => {
+  const poId      = el("recv-po-id").value;
+  const qtyInputs = [...el("recv-item-rows").querySelectorAll(".recv-qty")];
+  const receives  = qtyInputs.map(inp => ({
+    idx:      Number(inp.dataset.idx),
+    itemId:   inp.dataset.itemId,
+    itemName: inp.dataset.itemName,
+    recvQty:  Number(inp.value) || 0,
+  })).filter(r => r.recvQty > 0);
+  if (receives.length === 0) { alert("Enter at least one received quantity."); return; }
+  el("recv-save").disabled = true;
+  el("recv-save").textContent = "Saving…";
+  try {
+    const poSnap = await getDoc(doc(db, "purchaseOrders", poId));
+    const poData = poSnap.data();
+    await runTransaction(db, async (tx) => {
+      const refs  = receives.map(r => doc(db, "inventory", r.itemId));
+      const snaps = await Promise.all(refs.map(r => tx.get(r)));
+      const updatedItems = [...poData.items];
+      snaps.forEach((snap, i) => {
+        const recv     = receives[i];
+        const newStock = (snap.data().currentStock ?? 0) + recv.recvQty;
+        tx.update(refs[i], { currentStock: newStock, updatedAt: serverTimestamp() });
+        const movRef = doc(collection(db, "stockMovements"));
+        tx.set(movRef, {
+          itemId: recv.itemId, itemName: recv.itemName, type: "in_po",
+          qty: recv.recvQty, balanceAfter: newStock,
+          poId, poNumber: poData.poNumber,
+          date: todayKey(), createdAt: serverTimestamp(),
+        });
+        updatedItems[recv.idx] = {
+          ...updatedItems[recv.idx],
+          receivedQty: (updatedItems[recv.idx].receivedQty || 0) + recv.recvQty,
+        };
+      });
+      const allDone = updatedItems.every(i => (i.receivedQty || 0) >= i.qty);
+      tx.update(doc(db, "purchaseOrders", poId), {
+        items: updatedItems,
+        status: allDone ? "received" : "partial",
+        ...(allDone ? { receivedAt: serverTimestamp() } : {}),
+        updatedAt: serverTimestamp(),
+      });
+    });
+    el("recv-modal").style.display = "none";
+    loadPOs();
+  } catch (e) {
+    alert("Failed: " + e.message);
+  } finally {
+    el("recv-save").disabled = false;
+    el("recv-save").textContent = "Update stock from PO";
+  }
+};
+
+// ── Utility ───────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s || "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+</script>
+<script>if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(()=>{});}</script>
+</body>
+</html>
