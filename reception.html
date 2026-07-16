@@ -56,11 +56,12 @@
       <a href="patients.html">Patients</a>
       <a href="billing.html">Billing</a>
       <a href="inventory.html">Inventory</a>
+      <a href="inpatient.html">Inpatient</a>
       <a href="board.html">Queue Board</a>
       <a href="admin.html">Admin Setup</a>
       <a href="backup.html">Backup</a>
     </nav>
-    <div class="user-pill"><span id="user-email">—</span><button id="logout-btn">Sign out</button></div>
+    <div class="user-pill"><span id="user-email">—</span><a href="change-password.html" style="font-size:0.8rem;color:var(--teal-700);text-decoration:none;padding:0.2rem 0.5rem;border:1px solid var(--teal-300);border-radius:20px;white-space:nowrap;">🔑 Password</a><button id="logout-btn">Sign out</button></div>
     <button id="theme-toggle-btn" title="Switch theme" style="background:none;border:none;cursor:pointer;font-size:1.1rem;padding:0.2rem 0.4rem;opacity:0.8;" aria-label="Switch theme">🎨</button>
   </header>
 
@@ -546,7 +547,7 @@ async function doSearch(term) {
   // Use Firestore prefix queries for name, mobile, and patientCode to avoid full collection scans.
   // Firestore range queries on a single field at a time; we run three in parallel and deduplicate.
   const prefixEnd = (s) => s.slice(0, -1) + String.fromCharCode(s.charCodeAt(s.length - 1) + 1);
-  const termUpper = term + ""; // high Unicode suffix works as "starts with" range end
+  const termUpper = term + ""; //  = high Unicode sentinel for Firestore prefix range
   const [nameSnap, mobileSnap, codeSnap] = await Promise.all([
     getDocs(query(patientsRef, where("name", ">=", term), where("name", "<=", termUpper))),
     getDocs(query(patientsRef, where("mobile", ">=", term), where("mobile", "<=", termUpper))),

@@ -66,7 +66,7 @@ document.addEventListener("DOMContentLoaded",()=>{
       <a href="inpatient.html" class="active">Inpatient</a>
       <a href="board.html">Queue Board</a>
     </nav>
-    <div class="user-pill"><span id="user-email">—</span><button id="logout-btn">Sign out</button></div>
+    <div class="user-pill"><span id="user-email">—</span><a href="change-password.html" style="font-size:0.8rem;color:var(--teal-700);text-decoration:none;padding:0.2rem 0.5rem;border:1px solid var(--teal-300);border-radius:20px;white-space:nowrap;">🔑 Password</a><button id="logout-btn">Sign out</button></div>
     <button id="theme-toggle-btn" title="Switch theme" style="background:none;border:none;cursor:pointer;font-size:1.1rem;padding:0.2rem 0.4rem;opacity:0.8;" aria-label="Switch theme">🎨</button>
   </header>
 
@@ -85,13 +85,33 @@ document.addEventListener("DOMContentLoaded",()=>{
       </div>
 
       <div id="pane-active">
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;align-items:center;">
+          <input id="filter-act-q" type="text" class="form-input" style="flex:1;min-width:150px;" placeholder="Search name / mobile / bed…" />
+          <select id="filter-act-doc" class="form-input" style="min-width:130px;"><option value="">All Doctors</option></select>
+          <select id="filter-act-ward" class="form-input" style="min-width:110px;"><option value="">All Wards</option></select>
+        </div>
         <div id="active-list"><p class="muted">Loading…</p></div>
+        <div id="pagination-active" style="display:flex;align-items:center;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;font-size:0.84rem;color:var(--ink-soft);"></div>
       </div>
       <div id="pane-discharged" style="display:none;">
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;align-items:center;">
+          <input id="filter-dis-q" type="text" class="form-input" style="flex:1;min-width:150px;" placeholder="Search name / mobile…" />
+          <select id="filter-dis-doc" class="form-input" style="min-width:130px;"><option value="">All Doctors</option></select>
+          <input id="filter-dis-from" type="date" class="form-input" style="min-width:130px;" title="Admitted from" />
+          <input id="filter-dis-to" type="date" class="form-input" style="min-width:130px;" title="Admitted to" />
+        </div>
         <div id="discharged-list"><p class="muted">Loading…</p></div>
+        <div id="pagination-discharged" style="display:flex;align-items:center;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;font-size:0.84rem;color:var(--ink-soft);"></div>
       </div>
       <div id="pane-closed" style="display:none;">
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;align-items:center;">
+          <input id="filter-cls-q" type="text" class="form-input" style="flex:1;min-width:150px;" placeholder="Search name / mobile…" />
+          <select id="filter-cls-doc" class="form-input" style="min-width:130px;"><option value="">All Doctors</option></select>
+          <input id="filter-cls-from" type="date" class="form-input" style="min-width:130px;" title="Discharged from" />
+          <input id="filter-cls-to" type="date" class="form-input" style="min-width:130px;" title="Discharged to" />
+        </div>
         <div id="closed-list"><p class="muted">Loading…</p></div>
+        <div id="pagination-closed" style="display:flex;align-items:center;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;font-size:0.84rem;color:var(--ink-soft);"></div>
       </div>
       <div id="pane-beds" style="display:none;">
         <div style="display:flex;justify-content:flex-end;margin-bottom:0.7rem;">
@@ -150,6 +170,7 @@ document.addEventListener("DOMContentLoaded",()=>{
       <button class="sub-tab" data-et="vitals">Vitals</button>
       <button class="sub-tab" data-et="charges">Charges</button>
       <button class="sub-tab" data-et="bill">Bill</button>
+      <button class="sub-tab" data-et="summary">Summary</button>
     </div>
     <div id="et-visits">
       <div style="display:flex;justify-content:flex-end;margin-bottom:0.6rem;">
@@ -177,6 +198,28 @@ document.addEventListener("DOMContentLoaded",()=>{
         <button class="btn btn-primary" id="gen-invoice-btn">+ Generate Invoice / Collect Payment</button>
       </div>
     </div>
+    <div id="et-summary" style="display:none;">
+      <div id="summary-no-content" style="text-align:center;padding:2rem 0;">
+        <p class="muted" style="margin-bottom:1rem;">No discharge summary saved yet.</p>
+        <button class="btn btn-primary" id="gen-summary-btn">⚡ Generate from Encounter Data</button>
+      </div>
+      <div id="summary-editor-wrap" style="display:none;">
+        <div style="display:flex;gap:0.3rem;flex-wrap:wrap;align-items:center;padding:0.35rem 0.5rem;border:1px solid var(--line);border-bottom:none;border-radius:var(--radius) var(--radius) 0 0;background:var(--paper-raised,var(--paper));">
+          <button class="btn btn-sm btn-outline" onmousedown="event.preventDefault();document.execCommand('bold')" title="Bold"><b>B</b></button>
+          <button class="btn btn-sm btn-outline" onmousedown="event.preventDefault();document.execCommand('italic')" title="Italic"><i>I</i></button>
+          <button class="btn btn-sm btn-outline" onmousedown="event.preventDefault();document.execCommand('underline')" title="Underline"><u>U</u></button>
+          <button class="btn btn-sm btn-outline" onmousedown="event.preventDefault();document.execCommand('insertUnorderedList')" title="Bullet list">• List</button>
+          <button class="btn btn-sm btn-outline" onmousedown="event.preventDefault();document.execCommand('removeFormat')" title="Clear formatting">✕ Format</button>
+          <span style="flex:1;"></span>
+          <button class="btn btn-sm btn-outline" id="print-saved-summary-btn" title="Print saved summary">🖨 Print</button>
+          <button class="btn btn-sm btn-outline" id="delete-summary-btn" style="color:var(--danger,#dc2626);" title="Delete and start over">🗑 Delete</button>
+          <button class="btn btn-sm btn-primary" id="save-summary-btn">💾 Save</button>
+        </div>
+        <div id="summary-editor" contenteditable="true" spellcheck="true"
+          style="border:1px solid var(--line);border-radius:0 0 var(--radius) var(--radius);padding:1rem;min-height:300px;max-height:52vh;overflow-y:auto;font-size:0.88rem;line-height:1.6;outline:none;background:var(--paper);"></div>
+        <div id="summary-save-status" style="font-size:0.78rem;color:var(--ink-soft);text-align:right;margin-top:0.3rem;min-height:1.2em;"></div>
+      </div>
+    </div>
     <div class="modal-footer">
       <button class="btn btn-outline" id="enc-close-btn">Close</button>
     </div>
@@ -186,10 +229,14 @@ document.addEventListener("DOMContentLoaded",()=>{
 <!-- ═══ ADD VISIT MODAL ═══ -->
 <div class="modal-bg" id="modal-visit" style="display:none;">
   <div class="modal-box">
-    <p class="modal-title">Add Doctor Visit</p>
+    <p class="modal-title" id="visit-modal-title">Add Doctor Visit</p>
     <div style="display:grid;gap:0.6rem;">
-      <div><label class="form-label">Doctor *</label>
-        <select id="visit-doctor" class="form-input"></select></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;">
+        <div><label class="form-label">Doctor *</label>
+          <select id="visit-doctor" class="form-input"></select></div>
+        <div><label class="form-label">Visit Date & Time *</label>
+          <input id="visit-datetime" type="datetime-local" class="form-input" /></div>
+      </div>
       <div><label class="form-label">Observations</label>
         <textarea id="visit-obs" class="form-input" rows="3"></textarea></div>
       <div><label class="form-label">Prescription / Treatment</label>
@@ -207,8 +254,10 @@ document.addEventListener("DOMContentLoaded",()=>{
 <!-- ═══ VITALS MODAL ═══ -->
 <div class="modal-bg" id="modal-vitals" style="display:none;">
   <div class="modal-box">
-    <p class="modal-title">Record Vitals</p>
+    <p class="modal-title" id="vital-modal-title">Record Vitals</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;">
+      <div style="grid-column:1/-1;"><label class="form-label">Date & Time *</label>
+        <input id="vital-datetime" type="datetime-local" class="form-input" /></div>
       <div><label class="form-label">Weight (kg)</label><input id="v-weight" type="number" class="form-input" /></div>
       <div><label class="form-label">Temp (°F)</label><input id="v-temp" type="number" class="form-input" /></div>
       <div><label class="form-label">BP Systolic</label><input id="v-bps" type="number" class="form-input" /></div>
@@ -298,18 +347,38 @@ document.addEventListener("DOMContentLoaded",()=>{
     <p class="modal-title">Generate Invoice</p>
     <div id="gen-inv-body" style="max-height:55vh;overflow-y:auto;padding-right:0.3rem;"></div>
     <div style="border-top:1px solid var(--line);padding-top:0.7rem;margin-top:0.7rem;">
-      <div id="gen-inv-total" style="font-weight:700;font-size:1rem;margin-bottom:0.6rem;color:var(--teal-900);"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;">
-        <div><label class="form-label">Amount Paid ₹</label><input id="gen-inv-paid" type="number" class="form-input" min="0" value="0" inputmode="decimal" /></div>
+      <div id="gen-inv-total" style="font-weight:700;font-size:1rem;margin-bottom:0.4rem;color:var(--teal-900);"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.6rem;margin-bottom:0.4rem;">
+        <div><label class="form-label">Discount / Write-off &#x20B9;</label><input id="gen-inv-discount" type="number" class="form-input" min="0" value="0" inputmode="decimal" placeholder="0" /></div>
+        <div><label class="form-label">Amount Paid &#x20B9;</label><input id="gen-inv-paid" type="number" class="form-input" min="0" value="0" inputmode="decimal" /></div>
         <div><label class="form-label">Payment Mode</label>
-          <select id="gen-inv-mode" class="form-input"><option>Cash</option><option>UPI</option><option>Card</option><option>Insurance</option><option>Advance</option></select></div>
+          <select id="gen-inv-mode" class="form-input"><option>Cash</option><option>UPI</option><option>Card</option><option>Insurance</option><option>Advance</option><option>Write-off</option></select></div>
       </div>
+      <div id="gen-inv-net" style="font-size:0.85rem;color:var(--ink-soft);min-height:1.2em;"></div>
+      <input type="hidden" id="gen-inv-gross" value="0" />
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" id="gen-inv-cancel">Cancel</button>
       <button class="btn btn-primary" id="gen-inv-confirm">Create Invoice &amp; Record Payment</button>
     </div>
   </div>
+</div>
+
+<!-- ═══ INPATIENT UPI QR OVERLAY ═══ -->
+<div id="inp-upi-modal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;background:var(--teal-900);z-index:300;flex-direction:column;align-items:center;justify-content:center;gap:1.25rem;">
+  <div style="color:white;font-size:0.85rem;letter-spacing:0.04em;text-transform:uppercase;opacity:0.7;" data-clinic-name>Clinic Queue</div>
+  <div id="inp-upi-qr-box" style="background:white;border-radius:14px;padding:1rem;width:220px;height:220px;display:flex;align-items:center;justify-content:center;"></div>
+  <div style="text-align:center;color:white;">
+    <div style="font-size:0.85rem;opacity:0.7;margin-bottom:0.25rem;">Scan to pay</div>
+    <div id="inp-upi-amount" style="font-size:2.5rem;font-weight:800;letter-spacing:0.01em;">₹0</div>
+    <div id="inp-upi-vpa" style="font-size:0.9rem;opacity:0.75;margin-top:0.25rem;"></div>
+    <div id="inp-upi-name" style="font-size:0.8rem;opacity:0.55;"></div>
+  </div>
+  <div style="display:flex;gap:1rem;margin-top:0.5rem;">
+    <button id="inp-upi-cancel" style="background:rgba(255,255,255,0.15);border:2px solid rgba(255,255,255,0.7);color:white;font-weight:700;font-size:0.95rem;padding:0.6rem 1.4rem;border-radius:8px;cursor:pointer;">✕ Cancel</button>
+    <button id="inp-upi-confirm" style="background:var(--sage-500);border:2px solid var(--sage-500);color:white;font-weight:700;font-size:1rem;padding:0.7rem 1.6rem;border-radius:8px;cursor:pointer;">Payment received ✓</button>
+  </div>
+  <div id="inp-upi-nosettings" style="display:none;color:rgba(255,255,255,0.6);font-size:0.8rem;text-align:center;max-width:320px;">UPI details not configured — add your UPI ID in Admin Setup → Clinic branding.</div>
 </div>
 
 <!-- ═══ CLOSE ENCOUNTER MODAL ═══ -->
@@ -328,13 +397,34 @@ document.addEventListener("DOMContentLoaded",()=>{
 <script type="module">
 import {
   auth, authReady, db, onAuthStateChanged, signOut,
-  collection, addDoc, doc, updateDoc, getDoc, getDocs, onSnapshot,
+  collection, addDoc, deleteDoc, doc, updateDoc, getDoc, getDocs, onSnapshot,
   query, where, orderBy, limit, runTransaction, writeBatch, serverTimestamp
 } from "./js/firebase-config.js";
 import { applyClinicBranding, todayKey } from "./js/queue-logic.js";
 import { attachThemeToggle } from "./js/theme.js";
+import { generateQR } from "./js/qrcode-lib.js";
 
 const esc = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+let _editingVisitId=null, _editingVitalId=null;
+
+// Returns an error string if dt is outside the current encounter's valid date range, else null.
+function validateEncDate(dtVal){
+  if(!dtVal||!currentEnc) return "Date is required.";
+  const dt=new Date(dtVal);
+  const admDt=toDate(currentEnc.admittedAt);
+  const endDt=currentEnc.dischargedAt?toDate(currentEnc.dischargedAt):new Date();
+  if(dt<admDt) return `Date cannot be before admission date (${fmtDT(currentEnc.admittedAt)}).`;
+  if(dt>new Date()) return "Date cannot be in the future.";
+  if(currentEnc.dischargedAt&&dt>endDt) return `Date cannot be after discharge (${fmtDT(currentEnc.dischargedAt)}).`;
+  return null;
+}
+
+// Returns a local datetime string (yyyy-MM-ddTHH:mm) suitable for datetime-local inputs.
+function toLocalDTString(date){
+  const d=date instanceof Date?date:new Date(date);
+  const pad=n=>String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 const fmt = n => Number(n||0).toFixed(2);
 const fmtDT = ts => { if(!ts) return "—"; const d=ts.toDate?ts.toDate():new Date(ts); return d.toLocaleDateString()+' '+d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); };
 const fmtD = ts => { if(!ts) return "—"; const d=ts.toDate?ts.toDate():new Date(ts); return d.toLocaleDateString(); };
@@ -401,6 +491,106 @@ async function loadDoctors(){
   }catch(e){}
 }
 
+
+// ── PAGINATION + FILTER STATE ──
+const PAGE_SIZE=10;
+let allEncounters=[];
+const encState={
+  active:   {page:0,q:"",doc:"",ward:""},
+  discharged:{page:0,q:"",doc:"",dateFrom:"",dateTo:""},
+  closed:   {page:0,q:"",doc:"",dateFrom:"",dateTo:""}
+};
+
+function applyEncFilters(list,status){
+  const st=encState[status];
+  if(st.q){
+    const lq=st.q.toLowerCase();
+    list=list.filter(e=>
+      (e.patientName||"").toLowerCase().includes(lq)||
+      (e.patientMobile||"").includes(st.q)||
+      (e.bedName||"").toLowerCase().includes(lq)
+    );
+  }
+  if(st.doc) list=list.filter(e=>e.primaryDoctorName===st.doc);
+  if(st.ward) list=list.filter(e=>e.bedWard===st.ward);
+  if(st.dateFrom){
+    const from=new Date(st.dateFrom);
+    const dateField=status==="closed"?"dischargedAt":"admittedAt";
+    list=list.filter(e=>e[dateField]&&toDate(e[dateField])>=from);
+  }
+  if(st.dateTo){
+    const to=new Date(st.dateTo); to.setHours(23,59,59);
+    const dateField=status==="closed"?"dischargedAt":"admittedAt";
+    list=list.filter(e=>e[dateField]&&toDate(e[dateField])<=to);
+  }
+  return list;
+}
+
+function refreshTabList(status){
+  const base=allEncounters.filter(e=>e.status===status);
+  const filtered=applyEncFilters(base,status);
+  const st=encState[status];
+  const total=filtered.length;
+  const pages=Math.max(1,Math.ceil(total/PAGE_SIZE));
+  if(st.page>=pages) st.page=pages-1;
+  const slice=filtered.slice(st.page*PAGE_SIZE,(st.page+1)*PAGE_SIZE);
+  renderEncList(slice,status+"-list",status);
+  renderPagination(status,st.page,pages,total,st.page*PAGE_SIZE);
+}
+
+function renderPagination(status,page,pages,total,offset){
+  const el=document.getElementById("pagination-"+status);
+  if(!el) return;
+  if(total===0){el.innerHTML="";return;}
+  const from=offset+1, to=Math.min(offset+PAGE_SIZE,total);
+  el.innerHTML=`
+    <span style="flex:1;color:var(--ink-soft);">Showing ${from}–${to} of ${total}</span>
+    <button class="btn btn-sm btn-outline" id="pg-prev-${status}" ${page===0?"disabled":""} onclick="goPage('${status}',${page-1})">‹ Prev</button>
+    <span style="font-weight:600;color:var(--teal-700);">Page ${page+1} / ${pages}</span>
+    <button class="btn btn-sm btn-outline" id="pg-next-${status}" ${page>=pages-1?"disabled":""} onclick="goPage('${status}',${page+1})">Next ›</button>`;
+}
+
+window.goPage=function(status,page){
+  encState[status].page=page;
+  refreshTabList(status);
+};
+
+function populateFilterSelects(){
+  const doctors=[...new Set(allEncounters.map(e=>e.primaryDoctorName).filter(Boolean))].sort();
+  const wards=[...new Set(allEncounters.map(e=>e.bedWard).filter(Boolean))].sort();
+  ["act","dis","cls"].forEach((pfx,i)=>{
+    const docSel=document.getElementById(`filter-${pfx}-doc`);
+    if(docSel){
+      const cur=docSel.value;
+      docSel.innerHTML='<option value="">All Doctors</option>'+doctors.map(d=>`<option value="${esc(d)}"${d===cur?' selected':''}>${esc(d)}</option>`).join("");
+    }
+  });
+  const wardSel=document.getElementById("filter-act-ward");
+  if(wardSel){
+    const cur=wardSel.value;
+    wardSel.innerHTML='<option value="">All Wards</option>'+wards.map(w=>`<option value="${esc(w)}"${w===cur?' selected':''}>${esc(w)}</option>`).join("");
+  }
+}
+
+// Wire up filter inputs
+[
+  ["filter-act-q",  e=>{ encState.active.q=e.target.value; encState.active.page=0; refreshTabList("active"); }],
+  ["filter-act-doc",e=>{ encState.active.doc=e.target.value; encState.active.page=0; refreshTabList("active"); }],
+  ["filter-act-ward",e=>{ encState.active.ward=e.target.value; encState.active.page=0; refreshTabList("active"); }],
+  ["filter-dis-q",  e=>{ encState.discharged.q=e.target.value; encState.discharged.page=0; refreshTabList("discharged"); }],
+  ["filter-dis-doc",e=>{ encState.discharged.doc=e.target.value; encState.discharged.page=0; refreshTabList("discharged"); }],
+  ["filter-dis-from",e=>{ encState.discharged.dateFrom=e.target.value; encState.discharged.page=0; refreshTabList("discharged"); }],
+  ["filter-dis-to", e=>{ encState.discharged.dateTo=e.target.value; encState.discharged.page=0; refreshTabList("discharged"); }],
+  ["filter-cls-q",  e=>{ encState.closed.q=e.target.value; encState.closed.page=0; refreshTabList("closed"); }],
+  ["filter-cls-doc",e=>{ encState.closed.doc=e.target.value; encState.closed.page=0; refreshTabList("closed"); }],
+  ["filter-cls-from",e=>{ encState.closed.dateFrom=e.target.value; encState.closed.page=0; refreshTabList("closed"); }],
+  ["filter-cls-to", e=>{ encState.closed.dateTo=e.target.value; encState.closed.page=0; refreshTabList("closed"); }],
+].forEach(([id,handler])=>{
+  const el=document.getElementById(id);
+  if(el) el.addEventListener(el.tagName==="SELECT"?"change":"input",handler);
+});
+
+
 // ── TABS ──
 const tabs={active:"pane-active",discharged:"pane-discharged",closed:"pane-closed",beds:"pane-beds"};
 ["active","discharged","closed","beds"].forEach(t=>{
@@ -416,12 +606,13 @@ const tabs={active:"pane-active",discharged:"pane-discharged",closed:"pane-close
 // ── ENCOUNTER SUBSCRIPTION ──
 function subscribeEncounters(){
   if(unsubEncounters) unsubEncounters();
-  const q=query(collection(db,"inpatientEncounters"),orderBy("admittedAt","desc"),limit(200));
+  const q=query(collection(db,"inpatientEncounters"),orderBy("admittedAt","desc"),limit(500));
   unsubEncounters=onSnapshot(q,snap=>{
-    const all=snap.docs.map(d=>({id:d.id,...d.data()}));
-    renderEncList(all.filter(e=>e.status==="active"),"active-list","active");
-    renderEncList(all.filter(e=>e.status==="discharged"),"discharged-list","discharged");
-    renderEncList(all.filter(e=>e.status==="closed"),"closed-list","closed");
+    allEncounters=snap.docs.map(d=>({id:d.id,...d.data()}));
+    populateFilterSelects();
+    refreshTabList("active");
+    refreshTabList("discharged");
+    refreshTabList("closed");
   });
 }
 
@@ -437,7 +628,8 @@ function renderEncList(list, containerId, status){
       : status==="discharged"
       ? `<button class="btn btn-sm btn-outline" onclick="openEncDetails('${e.id}','bill')">💳 Bill</button>
          <button class="btn btn-sm btn-primary" onclick="openCloseEnc('${e.id}')">✅ Close</button>`
-      : `<button class="btn btn-sm btn-outline" onclick="printSummary('${e.id}')">🖨 Print Summary</button>`;
+      : `<button class="btn btn-sm btn-outline" onclick="openEncDetails('${e.id}','summary')">📝 Summary</button>
+         <button class="btn btn-sm btn-outline" onclick="printSummary('${e.id}')">🖨 Print</button>`;
     return `<div class="enc-card ${status}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.3rem;">
         <div><strong>${esc(e.patientName)}</strong> <span class="muted">${esc(e.patientAge||"")}${e.patientAge?" yrs,":""} ${esc(e.patientGender||"")}</span></div>
@@ -503,15 +695,22 @@ document.getElementById("pt-search-btn").onclick=async()=>{
   res.innerHTML='<span class="muted">Searching…</span>';
   try{
     const ql=q2.toLowerCase();
-    const [nameSnap,nlSnap,mobSnap]=await Promise.all([
+    // Title-case first letter to handle patients without nameLower field
+    const qc=ql.charAt(0).toUpperCase()+ql.slice(1);
+    const [nameSnap,nlSnap,mobSnap,namecSnap]=await Promise.all([
       getDocs(query(collection(db,"patients"),where("name",">=",q2),where("name","<=",q2+""),limit(10))),
       getDocs(query(collection(db,"patients"),where("nameLower",">=",ql),where("nameLower","<=",ql+""),limit(10))),
-      getDocs(query(collection(db,"patients"),where("mobile","==",q2),limit(5)))
+      getDocs(query(collection(db,"patients"),where("mobile","==",q2),limit(5))),
+      getDocs(query(collection(db,"patients"),where("name",">=",qc),where("name","<=",qc+""),limit(10)))
     ]);
     const seen=new Set();
-    const snm=[...nameSnap.docs,...nlSnap.docs,...mobSnap.docs]
+    const snm=[...nameSnap.docs,...nlSnap.docs,...mobSnap.docs,...namecSnap.docs]
       .filter(d=>{if(seen.has(d.id))return false;seen.add(d.id);return true;})
       .map(d=>({id:d.id,...d.data()}));
+    // Lazily backfill nameLower for older records that don't have it
+    snm.filter(p=>!p.nameLower&&p.name).forEach(p=>{
+      updateDoc(doc(db,"patients",p.id),{nameLower:p.name.toLowerCase()}).catch(()=>{});
+    });
     if(!snm.length){res.innerHTML='<span class="muted">No patients found. Fill in details below to admit as new.</span>';return;}
     res.innerHTML=snm.map(p=>`<div style="padding:0.35rem 0.5rem;cursor:pointer;border-radius:4px;font-size:0.88rem;border-bottom:1px solid var(--line);" onclick="selectPatient('${p.id}','${esc(p.name||"")}','${p.age||""}','${esc(p.gender||"")}','${esc(p.mobile||"")}')">
       <strong>${esc(p.name)}</strong> <span class="muted">${esc(p.mobile||"")}${p.age?" · "+p.age+" yrs":""} ${esc(p.gender||"")}</span></div>`).join("");
@@ -545,6 +744,17 @@ document.getElementById("admit-save").onclick=async()=>{
   const btn=document.getElementById("admit-save");
   btn.disabled=true; btn.textContent="Saving…";
   try{
+    // Block if this patient already has an active or discharged (not yet closed) encounter
+    const patientIdVal=document.getElementById("adm-patient-id").value||null;
+    if(patientIdVal){
+      const dupSnap=await getDocs(query(collection(db,"inpatientEncounters"),
+        where("patientId","==",patientIdVal),where("status","in",["active","discharged"])));
+      if(!dupSnap.empty){
+        const ex=dupSnap.docs[0].data();
+        alert(`Cannot admit — ${name} already has an open inpatient encounter\nBed: ${ex.bedName} | Admitted: ${fmtDT(ex.admittedAt)} | Status: ${ex.status}\n\nPlease discharge and close that encounter first.`);
+        btn.disabled=false; btn.textContent="Admit Patient"; return;
+      }
+    }
     await runTransaction(db,async tx=>{
       const bedRef=doc(db,"beds",bedId);
       const bedSnap=await tx.get(bedRef);
@@ -589,7 +799,7 @@ document.querySelectorAll(".sub-tab").forEach(btn=>{
 
 function switchEncTab(tab){
   document.querySelectorAll(".sub-tab").forEach(b=>b.classList.toggle("active",b.dataset.et===tab));
-  ["visits","meds","vitals","charges","bill"].forEach(t=>{
+  ["visits","meds","vitals","charges","bill","summary"].forEach(t=>{
     document.getElementById("et-"+t).style.display=t===tab?"":"none";
   });
   if(tab==="visits") loadVisits();
@@ -597,6 +807,7 @@ function switchEncTab(tab){
   if(tab==="vitals") loadVitals();
   if(tab==="charges") loadCharges();
   if(tab==="bill") loadBill();
+  if(tab==="summary") loadSummaryTab();
 }
 
 document.getElementById("enc-close-btn").onclick=()=>document.getElementById("modal-enc").style.display="none";
@@ -607,9 +818,18 @@ async function loadVisits(){
   try{
     const snap=await getDocs(query(collection(db,"encounterVisits"),where("encounterId","==",currentEncId),orderBy("visitedAt","desc")));
     if(snap.empty){el.innerHTML='<p class="muted">No visits recorded.</p>';return;}
-    el.innerHTML=snap.docs.map(d=>{const v=d.data();return `<div class="visit-card">
-      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:0.3rem;">
-        <strong>Dr. ${esc(v.doctorName)}</strong><span class="muted">${fmtDT(v.visitedAt)}</span></div>
+    el.innerHTML=snap.docs.map(d=>{const v=d.data();const billed=!!v.invoiceId;return `<div class="visit-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.3rem;">
+        <div><strong>Dr. ${esc(v.doctorName)}</strong><span class="muted" style="margin-left:0.5rem;">${fmtDT(v.visitedAt)}</span></div>
+        <div style="display:flex;gap:0.4rem;align-items:center;">
+          ${billed?`<span style="font-size:0.72rem;background:var(--teal-100,#ccfbf1);color:var(--teal-700);padding:0.1rem 0.4rem;border-radius:10px;font-weight:600;">✓ Billed</span>`:""}
+          <button onclick="editVisit('${d.id}')" title="Edit visit" style="background:none;border:none;cursor:pointer;color:var(--teal-600,#0d9488);font-size:0.9rem;padding:0.1rem 0.3rem;border-radius:4px;" onmouseover="this.style.background='var(--teal-50,#f0fdfa)'" onmouseout="this.style.background='none'">✏</button>
+          ${billed
+            ?`<button onclick="alert('This visit is already invoiced. Delete the invoice from the Bill tab first to unbill it.')" title="Delete invoice first" style="background:none;border:none;cursor:not-allowed;color:#aaa;font-size:0.9rem;padding:0.1rem 0.3rem;" >🗑</button>`
+            :`<button onclick="deleteVisit('${d.id}')" title="Delete visit" style="background:none;border:none;cursor:pointer;color:var(--clay-500);font-size:0.9rem;padding:0.1rem 0.3rem;border-radius:4px;" onmouseover="this.style.background='var(--clay-100,#fee2e2)'" onmouseout="this.style.background='none'">🗑</button>`
+          }
+        </div>
+      </div>
       ${v.observations?`<div style="margin-top:0.3rem;"><span class="muted">Observations:</span> ${esc(v.observations)}</div>`:""}
       ${v.prescription?`<div><span class="muted">Rx:</span> ${esc(v.prescription)}</div>`:""}
       ${v.visitCharge?`<div style="font-size:0.82rem;color:var(--teal-700);">Charge: ₹${fmt(v.visitCharge)}</div>`:""}
@@ -618,16 +838,26 @@ async function loadVisits(){
 }
 
 document.getElementById("add-visit-btn").onclick=()=>{
+  _editingVisitId=null;
+  document.getElementById("visit-modal-title").textContent="Add Doctor Visit";
+  document.getElementById("visit-save").textContent="Save Visit";
   const sel=document.getElementById("visit-doctor");
   sel.innerHTML=doctorsList.map(d=>`<option value="${esc(d.id)}">${esc(d.name||d.email||d.id)}</option>`).join("");
   const defCharge=clinicSettings.inpatientVisitCharge||500;
   document.getElementById("visit-charge").value=defCharge;
   document.getElementById("visit-obs").value="";
   document.getElementById("visit-rx").value="";
+  // Default to now, capped to discharge time if already discharged
+  const vNow=currentEnc?.dischargedAt?toDate(currentEnc.dischargedAt):new Date();
+  const vMin=currentEnc?toLocalDTString(toDate(currentEnc.admittedAt)):"";
+  const vMax=currentEnc?.dischargedAt?toLocalDTString(toDate(currentEnc.dischargedAt)):toLocalDTString(new Date());
+  const vDtEl=document.getElementById("visit-datetime");
+  vDtEl.min=vMin; vDtEl.max=vMax;
+  vDtEl.value=toLocalDTString(vNow);
   document.getElementById("modal-visit").style.display="flex";
 };
 
-document.getElementById("visit-cancel").onclick=()=>document.getElementById("modal-visit").style.display="none";
+document.getElementById("visit-cancel").onclick=()=>{ _editingVisitId=null; document.getElementById("modal-visit").style.display="none"; };
 document.getElementById("visit-save").onclick=async()=>{
   const doctorId=document.getElementById("visit-doctor").value;
   const doctorSel=document.getElementById("visit-doctor");
@@ -638,12 +868,25 @@ document.getElementById("visit-save").onclick=async()=>{
   const btn=document.getElementById("visit-save");
   btn.disabled=true;
   try{
-    await addDoc(collection(db,"encounterVisits"),{
-      encounterId:currentEncId, doctorId, doctorName, observations:obs,
-      prescription:rx, visitCharge:charge, visitedAt:serverTimestamp(), createdAt:serverTimestamp()
-    });
+    const visitDtVal=document.getElementById("visit-datetime").value;
+    const visitDtErr=validateEncDate(visitDtVal);
+    if(visitDtErr){alert(visitDtErr);btn.disabled=false;return;}
+    const visitedAt=new Date(visitDtVal);
+    if(_editingVisitId){
+      await updateDoc(doc(db,"encounterVisits",_editingVisitId),{
+        doctorId, doctorName, observations:obs, prescription:rx, visitCharge:charge,
+        visitedAt, updatedAt:serverTimestamp()
+      });
+    }else{
+      await addDoc(collection(db,"encounterVisits"),{
+        encounterId:currentEncId, doctorId, doctorName, observations:obs,
+        prescription:rx, visitCharge:charge, visitedAt, createdAt:serverTimestamp()
+      });
+    }
+    _editingVisitId=null;
     document.getElementById("modal-visit").style.display="none";
     loadVisits();
+    if(document.getElementById("et-bill").style.display!=="none") loadBill();
   }catch(e){alert("Error: "+e.message);}
   btn.disabled=false;
 };
@@ -654,8 +897,15 @@ async function loadVitals(){
   try{
     const snap=await getDocs(query(collection(db,"encounterVitals"),where("encounterId","==",currentEncId),orderBy("recordedAt","desc")));
     if(snap.empty){el.innerHTML='<p class="muted">No vitals recorded.</p>';return;}
-    el.innerHTML=snap.docs.map(d=>{const v=d.data();return `<div class="vital-card">
-      <div style="display:flex;justify-content:space-between;"><span class="muted">${fmtDT(v.recordedAt)}</span><span class="muted">${esc(v.recordedBy||"")}</span></div>
+    el.innerHTML=snap.docs.map(d=>{const v=d.data();return `<div class="vital-card" style="position:relative;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <span class="muted">${fmtDT(v.recordedAt)}</span>
+        <div style="display:flex;gap:0.4rem;align-items:center;">
+          <span class="muted" style="font-size:0.78rem;">${esc(v.recordedBy||"")}</span>
+          <button onclick="editVital('${d.id}')" title="Edit vitals" style="background:none;border:none;cursor:pointer;color:var(--teal-600,#0d9488);font-size:0.9rem;padding:0.1rem 0.3rem;border-radius:4px;" onmouseover="this.style.background='var(--teal-50,#f0fdfa)'" onmouseout="this.style.background='none'">✏</button>
+          <button onclick="deleteVital('${d.id}')" title="Delete vital record" style="background:none;border:none;cursor:pointer;color:var(--clay-500);font-size:0.9rem;padding:0.1rem 0.3rem;border-radius:4px;" onmouseover="this.style.background='var(--clay-100,#fee2e2)'" onmouseout="this.style.background='none'">🗑</button>
+        </div>
+      </div>
       <div style="display:flex;flex-wrap:wrap;gap:0.5rem 1.2rem;margin-top:0.3rem;font-size:0.88rem;">
         ${v.weight?`<span>Weight: <strong>${v.weight} kg</strong></span>`:""}
         ${v.bp?`<span>BP: <strong>${v.bp}</strong></span>`:""}
@@ -669,24 +919,43 @@ async function loadVitals(){
 }
 
 document.getElementById("add-vital-btn").onclick=()=>{
+  _editingVitalId=null;
+  document.getElementById("vital-modal-title").textContent="Record Vitals";
+  document.getElementById("vitals-save").textContent="Save Vitals";
   ["v-weight","v-temp","v-bps","v-bpd","v-spo2","v-rr","v-notes"].forEach(id=>document.getElementById(id).value="");
+  const vtNow=currentEnc?.dischargedAt?toDate(currentEnc.dischargedAt):new Date();
+  const vtMin=currentEnc?toLocalDTString(toDate(currentEnc.admittedAt)):"";
+  const vtMax=currentEnc?.dischargedAt?toLocalDTString(toDate(currentEnc.dischargedAt)):toLocalDTString(new Date());
+  const vtDtEl=document.getElementById("vital-datetime");
+  vtDtEl.min=vtMin; vtDtEl.max=vtMax;
+  vtDtEl.value=toLocalDTString(vtNow);
   document.getElementById("modal-vitals").style.display="flex";
 };
-document.getElementById("vitals-cancel").onclick=()=>document.getElementById("modal-vitals").style.display="none";
+document.getElementById("vitals-cancel").onclick=()=>{ _editingVitalId=null; document.getElementById("modal-vitals").style.display="none"; };
 document.getElementById("vitals-save").onclick=async()=>{
   const bps=document.getElementById("v-bps").value; const bpd=document.getElementById("v-bpd").value;
   const btn=document.getElementById("vitals-save"); btn.disabled=true;
   try{
-    await addDoc(collection(db,"encounterVitals"),{
-      encounterId:currentEncId,
-      recordedAt:serverTimestamp(), recordedBy:currentUser.email,
+    const vitalData={
       weight:Number(document.getElementById("v-weight").value)||null,
       bp:bps&&bpd?`${bps}/${bpd}`:null,
       temp:Number(document.getElementById("v-temp").value)||null,
       spo2:Number(document.getElementById("v-spo2").value)||null,
       rr:Number(document.getElementById("v-rr").value)||null,
       notes:document.getElementById("v-notes").value.trim()||null
-    });
+    };
+    const vitalDtVal=document.getElementById("vital-datetime").value;
+    const vitalDtErr=validateEncDate(vitalDtVal);
+    if(vitalDtErr){alert(vitalDtErr);btn.disabled=false;return;}
+    const recordedAt=new Date(vitalDtVal);
+    if(_editingVitalId){
+      await updateDoc(doc(db,"encounterVitals",_editingVitalId),{...vitalData, recordedAt, updatedAt:serverTimestamp()});
+    }else{
+      await addDoc(collection(db,"encounterVitals"),{
+        encounterId:currentEncId, recordedAt, recordedBy:currentUser.email, ...vitalData, createdAt:serverTimestamp()
+      });
+    }
+    _editingVitalId=null;
     document.getElementById("modal-vitals").style.display="none";
     loadVitals();
   }catch(e){alert("Error: "+e.message);}
@@ -699,10 +968,18 @@ async function loadCharges(){
   try{
     const snap=await getDocs(query(collection(db,"encounterCharges"),where("encounterId","==",currentEncId),orderBy("createdAt","desc")));
     if(snap.empty){el.innerHTML='<p class="muted">No additional charges.</p>';return;}
-    el.innerHTML=snap.docs.map(d=>{const c=d.data();return `<div class="charge-card">
-      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:0.3rem;">
-        <strong>${esc(c.description)}</strong><span>₹${fmt(c.total)}</span></div>
-      <div class="muted" style="font-size:0.82rem;">${fmtD(c.chargeDate||c.createdAt)} &nbsp;| Amt: ₹${fmt(c.amount)} GST ${c.gstPct||0}% (₹${fmt(c.gstAmount)})</div>
+    el.innerHTML=snap.docs.map(d=>{const ch=d.data();const billed=!!ch.invoiceId;return `<div class="charge-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.3rem;">
+        <div><strong>${esc(ch.description)}</strong> <span>₹${fmt(ch.total)}</span></div>
+        <div style="display:flex;gap:0.4rem;align-items:center;">
+          ${billed?`<span style="font-size:0.72rem;background:var(--teal-100,#ccfbf1);color:var(--teal-700);padding:0.1rem 0.4rem;border-radius:10px;font-weight:600;">✓ Billed</span>`:""}
+          ${billed
+            ?`<button onclick="alert('This charge is already invoiced. Delete the invoice from the Bill tab first.')" title="Delete invoice first" style="background:none;border:none;cursor:not-allowed;color:#aaa;font-size:0.9rem;padding:0.1rem 0.3rem;">🗑</button>`
+            :`<button onclick="deleteCharge('${d.id}')" title="Delete charge" style="background:none;border:none;cursor:pointer;color:var(--clay-500);font-size:0.9rem;padding:0.1rem 0.3rem;border-radius:4px;" onmouseover="this.style.background='var(--clay-100,#fee2e2)'" onmouseout="this.style.background='none'">🗑</button>`
+          }
+        </div>
+      </div>
+      <div class="muted" style="font-size:0.82rem;">${fmtD(ch.chargeDate||ch.createdAt)} &nbsp;| Amt: ₹${fmt(ch.amount)} GST ${ch.gstPct||0}% (₹${fmt(ch.gstAmount)})</div>
     </div>`;}).join("");
   }catch(e){el.innerHTML='<p class="muted">Error.</p>';}
 }
@@ -710,7 +987,12 @@ async function loadCharges(){
 document.getElementById("add-charge-btn").onclick=()=>{
   document.getElementById("ch-desc").value=""; document.getElementById("ch-amt").value="";
   document.getElementById("ch-gst").value="0"; document.getElementById("ch-preview").textContent="";
-  document.getElementById("ch-date").value=new Date().toISOString().split("T")[0];
+  // Set date min/max from encounter window; default to today (or discharge date if discharged)
+  const chMin=toLocalDTString(toDate(currentEnc.admittedAt)).split("T")[0];
+  const chMax=(currentEnc.dischargedAt?toLocalDTString(toDate(currentEnc.dischargedAt)):toLocalDTString(new Date())).split("T")[0];
+  const chDefault=currentEnc.dischargedAt?chMax:new Date().toISOString().split("T")[0];
+  const chEl=document.getElementById("ch-date");
+  chEl.min=chMin; chEl.max=chMax; chEl.value=chDefault;
   document.getElementById("modal-charge").style.display="flex";
 };
 ["ch-amt","ch-gst"].forEach(id=>document.getElementById(id).oninput=updateChPreview);
@@ -725,13 +1007,22 @@ document.getElementById("charge-save").onclick=async()=>{
   const desc=document.getElementById("ch-desc").value.trim();
   const amount=Number(document.getElementById("ch-amt").value)||0;
   if(!desc||!amount){alert("Fill description and amount.");return;}
+  const chDateVal=document.getElementById("ch-date").value;
+  if(chDateVal){
+    // Validate date is within encounter window (charge date is date-only, compare at start of day)
+    const chDt=new Date(chDateVal+"T00:00:00");
+    const admDay=new Date(toLocalDTString(toDate(currentEnc.admittedAt)).split("T")[0]+"T00:00:00");
+    const endDay=currentEnc.dischargedAt?new Date(toLocalDTString(toDate(currentEnc.dischargedAt)).split("T")[0]+"T23:59:59"):new Date();
+    if(chDt<admDay){alert(`Charge date cannot be before admission date (${fmtD(currentEnc.admittedAt)}).`);return;}
+    if(chDt>endDay){alert(`Charge date cannot be after ${currentEnc.dischargedAt?"discharge":"today"} (${fmtD(currentEnc.dischargedAt||new Date())}).`);return;}
+  }
   const gstPct=Number(document.getElementById("ch-gst").value)||0;
   const gstAmount=amount*gstPct/100;
   const btn=document.getElementById("charge-save"); btn.disabled=true;
   try{
     await addDoc(collection(db,"encounterCharges"),{
       encounterId:currentEncId, description:desc, amount, gstPct, gstAmount,
-      total:amount+gstAmount, chargeDate:document.getElementById("ch-date").value,
+      total:amount+gstAmount, chargeDate:chDateVal,
       addedBy:currentUser.email, createdAt:serverTimestamp()
     });
     document.getElementById("modal-charge").style.display="none";
@@ -766,11 +1057,12 @@ async function loadBill(){
     ]);
     const totalInvoiced=invoicesSnap.docs.reduce((s,d)=>s+Number(d.data().grandTotal||0),0);
     const totalPaid=invoicesSnap.docs.reduce((s,d)=>s+Number(d.data().amountPaid||0),0);
+    const totalDiscounts=invoicesSnap.docs.reduce((s,d)=>s+Number(d.data().discountAmount||0)+Number(d.data().writeOffAmount||0),0);
 
-    // pending unbilled
+    // pending unbilled — derive billedDays from invoice lineItems to avoid mismatch with billedRentDays field
     const now=currentEnc.dischargedAt?currentEnc.dischargedAt:new Date();
-    const lastBilled=currentEnc.lastBilledDate?new Date(currentEnc.lastBilledDate):null;
-    const billedDays=currentEnc.billedRentDays||0;
+    const billedDaysFromInv=invoicesSnap.docs.reduce((s,d)=>s+(d.data().lineItems||[]).filter(li=>li.type==="bed").reduce((ss,li)=>ss+(Number(li.days)||0),0),0);
+    const billedDays=Math.max(currentEnc.billedRentDays||0,billedDaysFromInv);
     const totalDays=daysBetween(currentEnc.admittedAt,now);
     const pendingDays=Math.max(0,totalDays-billedDays);
     const pendingBed=pendingDays*(currentEnc.dailyRent||0);
@@ -779,10 +1071,11 @@ async function loadBill(){
     const unbilledCharges=chargesSnap.docs.filter(d=>!d.data().invoiceId);
     const pendingVisit=unbilledVisits.reduce((s,d)=>s+Number(d.data().visitCharge||0),0);
     const pendingMed=unbilledMeds.reduce((s,d)=>(d.data().items||[]).reduce((ss,it)=>ss+Number(it.netQty||0)*Number(it.unitCost||0),0)+s,0);
-    const pendingOther=unbilledCharges.reduce((s,d)=>s+Number(d.data().amount||0)+Number(d.data().gstAmount||0),0);
+    // use total||amount+gstAmount so charges stored with only a total field are counted
+    const pendingOther=unbilledCharges.reduce((s,d)=>s+(d.data().total!=null?Number(d.data().total||0):Number(d.data().amount||0)+Number(d.data().gstAmount||0)),0);
     const pendingTotal=pendingBed+pendingVisit+pendingMed+pendingOther;
     const grandTotal=totalInvoiced+pendingTotal;
-    const balance=grandTotal-totalPaid;
+    const balance=Math.max(0,grandTotal-totalPaid-totalDiscounts);
 
     let html="";
     if(invoicesSnap.docs.length){
@@ -794,7 +1087,8 @@ async function loadBill(){
           <th style="padding:0.25rem 0.4rem;text-align:right;">Amount</th>
           <th style="padding:0.25rem 0.4rem;text-align:right;">Paid</th>
           <th style="padding:0.25rem 0.4rem;text-align:left;">Mode</th>
-          <th style="padding:0.25rem 0.4rem;"></th>
+          <th style="padding:0.25rem 0.4rem;text-align:right;">Balance</th>
+          <th style="padding:0.25rem 0.4rem;">Actions</th>
         </tr></thead><tbody>`;
       invoicesSnap.docs.forEach(d=>{
         const inv=d.data(); const invId=d.id;
@@ -804,7 +1098,14 @@ async function loadBill(){
           <td style="padding:0.25rem 0.4rem;text-align:right;">₹${fmt(inv.grandTotal)}</td>
           <td style="padding:0.25rem 0.4rem;text-align:right;">₹${fmt(inv.amountPaid)}</td>
           <td style="padding:0.25rem 0.4rem;">${esc(inv.paymentMode||"")}</td>
-          <td style="padding:0.25rem 0.4rem;"><button class="btn btn-sm btn-outline" onclick="printInvoice('${invId}')">🖨</button></td>
+          <td style="padding:0.25rem 0.4rem;text-align:right;${(inv.balanceDue||0)>0.01?"color:#d97706;font-weight:600;":"color:var(--sage-700);"}">${(inv.balanceDue||0)>0.01?`₹${fmt(inv.balanceDue)}`:"✓ Settled"}</td>
+          <td style="padding:0.25rem 0.4rem;">
+            <div style="display:flex;gap:0.3rem;flex-wrap:wrap;">
+              ${(inv.balanceDue||0)>0.01?`<button class="btn btn-sm" style="background:#fef3c7;border:1px solid #d97706;color:#92400e;font-size:0.75rem;padding:0.2rem 0.5rem;border-radius:4px;cursor:pointer;white-space:nowrap;" onclick="writeOffBalance('${invId}',${fmt(inv.balanceDue)})">✕ Write off &#x20B9;${fmt(inv.balanceDue)}</button>`:""}
+              <button class="btn btn-sm btn-outline" onclick="printInvoice('${invId}')">🖨</button>
+              <button class="btn btn-sm" style="background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;font-size:0.75rem;padding:0.2rem 0.5rem;border-radius:4px;cursor:pointer;" onclick="deleteInvoice('${invId}')">🗑 Delete</button>
+            </div>
+          </td>
         </tr>`;
       });
       html+=`</tbody></table>
@@ -818,12 +1119,24 @@ async function loadBill(){
       if(pendingMed>0) html+=`<div class="bill-row"><span>Medicine charges (${unbilledMeds.length} request${unbilledMeds.length>1?"s":""})</span><span>₹${fmt(pendingMed)}</span></div>`;
       if(pendingOther>0) html+=`<div class="bill-row"><span>Other charges (${unbilledCharges.length} item${unbilledCharges.length>1?"s":""})</span><span>₹${fmt(pendingOther)}</span></div>`;
       html+=`<div class="bill-row" style="font-weight:600;"><span>Pending Total</span><span>₹${fmt(pendingTotal)}</span></div>`;
+      html+=`<div style="margin-top:0.5rem;padding:0.5rem 0.7rem;background:var(--amber-100,#fef3c7);border:1px solid var(--amber-400,#fbbf24);border-radius:var(--radius);font-size:0.8rem;color:var(--ink);">
+        💡 <strong>To waive/discount pending items:</strong> click <em>+ Generate Invoice / Collect Payment</em> below → select items → enter amount in <strong>Discount / Write-off ₹</strong> field → set Amount Paid = 0 → Create Invoice.
+      </div>`;
     }
     if(!invoicesSnap.docs.length&&pendingTotal===0){
       html='<p class="muted">No charges recorded yet.</p>';
     }
+    // Same-day admission+discharge warning
+    const admDate=toDate(currentEnc.admittedAt); const disDate=currentEnc.dischargedAt?toDate(currentEnc.dischargedAt):null;
+    if(disDate&&admDate.toDateString()===disDate.toDateString()&&(disDate-admDate)<86400000&&(currentEnc.dailyRent||0)>0){
+      html=`<div style="margin-bottom:0.6rem;padding:0.5rem 0.7rem;background:var(--amber-100,#fef3c7);border:1px solid var(--amber-400,#fbbf24);border-radius:var(--radius);font-size:0.8rem;color:var(--ink);">
+        ⚠️ <strong>Same-day discharge:</strong> Patient was admitted and discharged on the same day. Minimum 1 day bed rent (₹${fmt(currentEnc.dailyRent)}) applies. Use Discount / Write-off to waive if needed.
+      </div>`+html;
+    }
     html+=`<div class="bill-row total" style="margin-top:0.5rem;"><span>Grand Total</span><span>₹${fmt(grandTotal)}</span></div>
-      <div class="bill-row"><span>Balance Due</span><span style="color:${balance>0?"var(--clay-500)":"var(--sage-700)"};">₹${fmt(balance)}</span></div>`;
+      ${totalDiscounts>0?`<div class="bill-row" style="color:#d97706;"><span>Discount / Write-off</span><span>- ₹${fmt(totalDiscounts)}</span></div>
+      <div class="bill-row" style="font-weight:600;"><span>Net Payable</span><span>₹${fmt(Math.max(0,grandTotal-totalDiscounts))}</span></div>`:""}
+      <div class="bill-row"><span>Balance Due</span><span style="color:${balance>0.01?"var(--clay-500)":"var(--sage-700)"};">${balance>0.01?"₹"+fmt(balance):"✓ Fully Settled"}</span></div>`;
     el.innerHTML=html;
   }catch(e){el.innerHTML='<p class="muted">Error loading bill: '+e.message+'</p>';}
 }
@@ -832,14 +1145,17 @@ document.getElementById("gen-invoice-btn").onclick=async()=>openGenInvoiceModal(
 
 async function openGenInvoiceModal(){
   if(!currentEnc) return;
-  const [visitsSnap,medsSnap,chargesSnap]=await Promise.all([
+  const [visitsSnap,medsSnap,chargesSnap,existingInvSnap]=await Promise.all([
     getDocs(query(collection(db,"encounterVisits"),where("encounterId","==",currentEncId))),
     getDocs(query(collection(db,"encounterMedRequests"),where("encounterId","==",currentEncId))),
-    getDocs(query(collection(db,"encounterCharges"),where("encounterId","==",currentEncId)))
+    getDocs(query(collection(db,"encounterCharges"),where("encounterId","==",currentEncId))),
+    getDocs(query(collection(db,"encounterInvoices"),where("encounterId","==",currentEncId)))
   ]);
   const now=currentEnc.dischargedAt?currentEnc.dischargedAt:new Date();
   const totalDays=daysBetween(currentEnc.admittedAt,now);
-  const billedDays=currentEnc.billedRentDays||0;
+  // Derive billedDays from invoice lineItems (more reliable than the encounter field alone)
+  const billedDaysFromInv=existingInvSnap.docs.reduce((s,d)=>s+(d.data().lineItems||[]).filter(li=>li.type==="bed").reduce((ss,li)=>ss+(Number(li.days)||0),0),0);
+  const billedDays=Math.max(currentEnc.billedRentDays||0,billedDaysFromInv);
   const pendingDays=Math.max(0,totalDays-billedDays);
   const unbilledVisits=visitsSnap.docs.filter(d=>!d.data().invoiceId).map(d=>({id:d.id,...d.data()}));
   const unbilledMeds=medsSnap.docs.filter(d=>!d.data().invoiceId).map(d=>({id:d.id,...d.data()}));
@@ -906,10 +1222,15 @@ async function openGenInvoiceModal(){
     const bedChk=document.getElementById("inv-bed-chk");
     if(bedChk&&bedChk.checked) t+=Number(document.getElementById("inv-bed-amt").value)||0;
     document.querySelectorAll(".inv-visit-chk:checked,.inv-med-chk:checked,.inv-chg-chk:checked").forEach(c=>t+=Number(c.dataset.amt)||0);
-    document.getElementById("gen-inv-total").textContent=`Invoice Total: ₹${fmt(t)}`;
-    document.getElementById("gen-inv-paid").value=fmt(t);
+    document.getElementById("gen-inv-total").textContent=`Gross Total: ₹${fmt(t)}`;
+    document.getElementById("gen-inv-gross").value=String(t);
+    const disc=Number(document.getElementById("gen-inv-discount").value)||0;
+    const net=Math.max(0,t-disc);
+    document.getElementById("gen-inv-net").textContent=disc>0?`Net Payable after discount: ₹${fmt(net)}`:"" ;
+    document.getElementById("gen-inv-paid").value=fmt(net);
   }
   document.getElementById("gen-inv-body").addEventListener("change",updateTotal);
+  document.getElementById("gen-inv-discount").addEventListener("input",updateTotal);
   updateTotal();
   document.getElementById("modal-gen-invoice").style.display="flex";
 }
@@ -931,30 +1252,188 @@ document.getElementById("gen-inv-confirm").onclick=async()=>{
     const medIds=[]; document.querySelectorAll(".inv-med-chk:checked").forEach(c=>{ medIds.push(c.dataset.id); grandTotal+=Number(c.dataset.amt)||0; lineItems.push({type:"medicine",medReqId:c.dataset.id,total:Number(c.dataset.amt)||0}); });
     const chgIds=[]; document.querySelectorAll(".inv-chg-chk:checked").forEach(c=>{ chgIds.push(c.dataset.id); grandTotal+=Number(c.dataset.amt)||0; lineItems.push({type:"charge",chargeId:c.dataset.id,total:Number(c.dataset.amt)||0}); });
     if(!lineItems.length){ alert("Select at least one item."); btn.disabled=false; return; }
-    const amountPaid=Number(document.getElementById("gen-inv-paid").value)||0;
+    const discountAmount=Number(document.getElementById("gen-inv-discount").value)||0;
+    const netPayable=Math.max(0,grandTotal-discountAmount);
+    const amountPaid=Math.min(Number(document.getElementById("gen-inv-paid").value)||0,netPayable);
     const paymentMode=document.getElementById("gen-inv-mode").value;
-    const invoiceNumber=await generateInvoiceNumber();
-    const invRef=await addDoc(collection(db,"encounterInvoices"),{
-      encounterId:currentEncId, invoiceNumber, lineItems, grandTotal, amountPaid,
-      paymentMode, balanceDue:grandTotal-amountPaid, drugLicenseNumber,
-      status:amountPaid>=grandTotal?"paid":"partial", createdAt:serverTimestamp()
-    });
-    // mark items as invoiced
+
+    // Capture state for the async save (needed if UPI shows overlay)
+    // Fetch current invoices once so saveInvoice can compute safe billedRentDays
+    let allPrevInvDocs=[];
+    try{ const prevInvSnap=await getDocs(query(collection(db,"encounterInvoices"),where("encounterId","==",currentEncId)));
+      allPrevInvDocs=prevInvSnap.docs; }catch(_){}
+    const saveInvoice=async()=>{
+      try{
+        const invoiceNumber=await generateInvoiceNumber();
+        const invRef=await addDoc(collection(db,"encounterInvoices"),{
+          encounterId:currentEncId,
+          patientId:currentEnc?.patientId||null,
+          patientName:currentEnc?.patientName||null,
+          invoiceNumber, lineItems, grandTotal, discountAmount,
+          netPayable, amountPaid, paymentMode, balanceDue:netPayable-amountPaid, drugLicenseNumber,
+          status:amountPaid>=netPayable?"paid":"partial", createdAt:serverTimestamp()
+        });
+        const batch=writeBatch(db);
+        visitIds.forEach(id=>batch.update(doc(db,"encounterVisits",id),{invoiceId:invRef.id}));
+        medIds.forEach(id=>batch.update(doc(db,"encounterMedRequests",id),{invoiceId:invRef.id}));
+        chgIds.forEach(id=>batch.update(doc(db,"encounterCharges",id),{invoiceId:invRef.id}));
+        // Re-read billedRentDays from the invoice lineItems to avoid stale currentEnc value
+        const prevBilledFromInv=allPrevInvDocs.reduce((s,d)=>{
+          return s+(d.data().lineItems||[]).filter(li=>li.type==="bed").reduce((ss,li)=>ss+(Number(li.days)||0),0);
+        },0);
+        const safePrevBilled=Math.max(currentEnc.billedRentDays||0,prevBilledFromInv);
+        const encUpdate={updatedAt:serverTimestamp()};
+        if(bedDaysUsed>0) encUpdate.billedRentDays=safePrevBilled+bedDaysUsed;
+        batch.update(doc(db,"inpatientEncounters",currentEncId),encUpdate);
+        await batch.commit();
+        const snap=await getDoc(doc(db,"inpatientEncounters",currentEncId));
+        if(snap.exists()) currentEnc={id:snap.id,...snap.data()};
+        document.getElementById("modal-gen-invoice").style.display="none";
+        loadBill();
+      }catch(e){alert("Error saving invoice: "+e.message);}
+      document.getElementById("gen-inv-confirm").disabled=false;
+    };
+
+    if(paymentMode==="UPI" && amountPaid>0){
+      // Show QR overlay; saveInvoice called on "Payment received ✓"
+      _pendingInvoiceSave=saveInvoice;
+      showInpUpiQr(amountPaid);
+      // btn stays disabled until overlay resolves
+    }else{
+      await saveInvoice();
+    }
+  }catch(e){alert("Error: "+e.message); btn.disabled=false;}
+};
+
+
+// ── DELETE HANDLERS ──
+
+window.editVisit=async(id)=>{
+  try{
+    const snap=await getDoc(doc(db,"encounterVisits",id));
+    if(!snap.exists()) return;
+    const v=snap.data();
+    _editingVisitId=id;
+    document.getElementById("visit-modal-title").textContent="Edit Doctor Visit";
+    document.getElementById("visit-save").textContent="Update Visit";
+    const sel=document.getElementById("visit-doctor");
+    sel.innerHTML=doctorsList.map(d=>`<option value="${esc(d.id)}">${esc(d.name||d.email||d.id)}</option>`).join("");
+    sel.value=v.doctorId||"";
+    // If stored doctor not in current list (e.g. left), add a placeholder option
+    if(!sel.value&&v.doctorName){
+      const opt=document.createElement("option");
+      opt.value=v.doctorId||""; opt.text=v.doctorName; sel.prepend(opt); sel.value=opt.value;
+    }
+    document.getElementById("visit-obs").value=v.observations||"";
+    document.getElementById("visit-rx").value=v.prescription||"";
+    document.getElementById("visit-charge").value=v.visitCharge||0;
+    const visitDt=v.visitedAt?toDate(v.visitedAt):new Date();
+    document.getElementById("visit-datetime").value=toLocalDTString(visitDt);
+    document.getElementById("modal-visit").style.display="flex";
+  }catch(e){alert("Error loading visit: "+e.message);}
+};
+
+window.editVital=async(id)=>{
+  try{
+    const snap=await getDoc(doc(db,"encounterVitals",id));
+    if(!snap.exists()) return;
+    const v=snap.data();
+    _editingVitalId=id;
+    document.getElementById("vital-modal-title").textContent="Edit Vitals";
+    document.getElementById("vitals-save").textContent="Update Vitals";
+    const bp=(v.bp||"").split("/");
+    document.getElementById("v-weight").value=v.weight||"";
+    document.getElementById("v-temp").value=v.temp||"";
+    document.getElementById("v-bps").value=bp[0]||"";
+    document.getElementById("v-bpd").value=bp[1]||"";
+    document.getElementById("v-spo2").value=v.spo2||"";
+    document.getElementById("v-rr").value=v.rr||"";
+    document.getElementById("v-notes").value=v.notes||"";
+    const vitalDt=v.recordedAt?toDate(v.recordedAt):new Date();
+    document.getElementById("vital-datetime").value=toLocalDTString(vitalDt);
+    document.getElementById("modal-vitals").style.display="flex";
+  }catch(e){alert("Error loading vitals: "+e.message);}
+};
+
+window.deleteVital=async(id)=>{
+  if(!confirm("Delete this vitals record? This cannot be undone.")) return;
+  try{
+    await deleteDoc(doc(db,"encounterVitals",id));
+    loadVitals();
+  }catch(e){alert("Error: "+e.message);}
+};
+
+window.deleteVisit=async(id)=>{
+  if(!confirm("Delete this doctor visit? This cannot be undone.")) return;
+  try{
+    await deleteDoc(doc(db,"encounterVisits",id));
+    loadVisits();
+    // refresh bill to update pending totals
+    if(document.getElementById("et-bill").style.display!=="none") loadBill();
+  }catch(e){alert("Error: "+e.message);}
+};
+
+window.deleteCharge=async(id)=>{
+  if(!confirm("Delete this charge? This cannot be undone.")) return;
+  try{
+    await deleteDoc(doc(db,"encounterCharges",id));
+    loadCharges();
+    if(document.getElementById("et-bill").style.display!=="none") loadBill();
+  }catch(e){alert("Error: "+e.message);}
+};
+
+window.deleteInvoice=async(invId)=>{
+  if(!confirm("Delete this invoice?\n\nThis will:\n• Mark all billed items (visits, medicines, charges) as unbilled\n• Restore bed rent days if applicable\n• Allow these items to be re-invoiced\n\nThis cannot be undone.")) return;
+  try{
+    const invSnap=await getDoc(doc(db,"encounterInvoices",invId));
+    if(!invSnap.exists()) return;
+    const inv=invSnap.data();
     const batch=writeBatch(db);
-    visitIds.forEach(id=>batch.update(doc(db,"encounterVisits",id),{invoiceId:invRef.id}));
-    medIds.forEach(id=>batch.update(doc(db,"encounterMedRequests",id),{invoiceId:invRef.id}));
-    chgIds.forEach(id=>batch.update(doc(db,"encounterCharges",id),{invoiceId:invRef.id}));
-    const encUpdate={updatedAt:serverTimestamp()};
-    if(bedDaysUsed>0) encUpdate.billedRentDays=(currentEnc.billedRentDays||0)+bedDaysUsed;
-    batch.update(doc(db,"inpatientEncounters",currentEncId),encUpdate);
+
+    // Un-stamp visits (both via lineItems and by querying invoiceId)
+    const visitSnap=await getDocs(query(collection(db,"encounterVisits"),where("invoiceId","==",invId)));
+    visitSnap.docs.forEach(d=>batch.update(doc(db,"encounterVisits",d.id),{invoiceId:null}));
+
+    // Un-stamp med requests
+    const medSnap=await getDocs(query(collection(db,"encounterMedRequests"),where("invoiceId","==",invId)));
+    medSnap.docs.forEach(d=>batch.update(doc(db,"encounterMedRequests",d.id),{invoiceId:null}));
+
+    // Un-stamp other charges
+    const chgSnap=await getDocs(query(collection(db,"encounterCharges"),where("invoiceId","==",invId)));
+    chgSnap.docs.forEach(d=>batch.update(doc(db,"encounterCharges",d.id),{invoiceId:null}));
+
+    // Restore billedRentDays if invoice included bed rent — read fresh from Firestore to avoid stale in-memory value
+    const bedItem=(inv.lineItems||[]).find(li=>li.type==="bed");
+    if(bedItem&&(bedItem.days||0)>0){
+      const freshEncSnap=await getDoc(doc(db,"inpatientEncounters",currentEncId));
+      const prevBilled=freshEncSnap.exists()?(freshEncSnap.data().billedRentDays||0):(currentEnc.billedRentDays||0);
+      const restored=Math.max(0,prevBilled-(bedItem.days||0));
+      batch.update(doc(db,"inpatientEncounters",currentEncId),{billedRentDays:restored,updatedAt:serverTimestamp()});
+    }
+
+    // Delete the invoice
+    batch.delete(doc(db,"encounterInvoices",invId));
     await batch.commit();
-    // refresh
-    const snap=await getDoc(doc(db,"inpatientEncounters",currentEncId));
-    if(snap.exists()) currentEnc={id:snap.id,...snap.data()};
-    document.getElementById("modal-gen-invoice").style.display="none";
+
+    // Refresh currentEnc so billedRentDays is up to date
+    const encSnap=await getDoc(doc(db,"inpatientEncounters",currentEncId));
+    if(encSnap.exists()) currentEnc={id:encSnap.id,...encSnap.data()};
+
+    loadBill();
+    // Also refresh visits/charges tabs if they were loaded
+    loadVisits();
+    loadCharges();
+  }catch(e){alert("Error deleting invoice: "+e.message);}
+};
+
+window.writeOffBalance=async(invId,balanceDue)=>{
+  if(!confirm(`Write off ${balanceDue} balance on this invoice?\nThis marks it as fully settled without collecting the remaining amount.`)) return;
+  try{
+    await updateDoc(doc(db,"encounterInvoices",invId),{
+      writeOffAmount:Number(balanceDue)||0, balanceDue:0, status:"paid", updatedAt:serverTimestamp()
+    });
     loadBill();
   }catch(e){alert("Error: "+e.message);}
-  btn.disabled=false;
 };
 
 window.printInvoice=async(invId)=>{
@@ -1112,12 +1591,263 @@ window.openMedReturn=async(reqId)=>{
 };
 document.getElementById("med-return-cancel").onclick=()=>document.getElementById("modal-med-return").style.display="none";
 
+
+// ── INPATIENT UPI QR ──
+let _pendingInvoiceSave=null;
+
+function showInpUpiQr(amount){
+  const vpa=clinicSettings.upiVpa||null;
+  const nosettings=document.getElementById("inp-upi-nosettings");
+  const qrBox=document.getElementById("inp-upi-qr-box");
+  document.getElementById("inp-upi-amount").textContent=`₹${fmt(amount)}`;
+  document.getElementById("inp-upi-vpa").textContent=vpa||"UPI not configured";
+  document.getElementById("inp-upi-name").textContent=clinicSettings.upiMerchantName||"";
+  if(!vpa){
+    nosettings.style.display="block"; qrBox.innerHTML="";
+  }else{
+    nosettings.style.display="none";
+    try{
+      const uri=`upi://pay?pa=${encodeURIComponent(vpa)}&am=${amount.toFixed(2)}&cu=INR`
+        +(clinicSettings.upiMerchantName?`&pn=${encodeURIComponent(clinicSettings.upiMerchantName)}`:"")
+        +(clinicSettings.upiMerchantCode?`&mc=${encodeURIComponent(clinicSettings.upiMerchantCode)}`:"");
+      const {matrix,size}=generateQR(uri,{errorCorrectionLevel:"M"});
+      const pad=4, cell=Math.floor(200/(size+pad*2)), total=cell*(size+pad*2);
+      let path="";
+      matrix.forEach((row,r)=>row.forEach((dark,c)=>{if(dark)path+=`M${(c+pad)*cell},${(r+pad)*cell}h${cell}v${cell}h-${cell}z`;}));
+      qrBox.innerHTML=`<svg viewBox="0 0 ${total} ${total}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" style="width:200px;height:200px;"><rect width="${total}" height="${total}" fill="#fff"/><path d="${path}" fill="#0F4C4F"/></svg>`;
+    }catch(err){qrBox.innerHTML=`<p style="font-size:0.75rem;color:var(--teal-900);">QR error</p>`;}
+  }
+  document.getElementById("inp-upi-modal").style.display="flex";
+}
+
+document.getElementById("inp-upi-cancel").onclick=()=>{
+  document.getElementById("inp-upi-modal").style.display="none";
+  _pendingInvoiceSave=null;
+  document.getElementById("gen-inv-confirm").disabled=false;
+};
+
+document.getElementById("inp-upi-confirm").onclick=async()=>{
+  if(!_pendingInvoiceSave) return;
+  document.getElementById("inp-upi-modal").style.display="none";
+  await _pendingInvoiceSave();
+  _pendingInvoiceSave=null;
+};
+
+
+// ── DISCHARGE SUMMARY EDITOR ──
+async function loadSummaryTab(){
+  const noContent=document.getElementById("summary-no-content");
+  const editorWrap=document.getElementById("summary-editor-wrap");
+  const editor=document.getElementById("summary-editor");
+  const status=document.getElementById("summary-save-status");
+  status.textContent="";
+  noContent.style.display=""; editorWrap.style.display="none";
+  try{
+    const snap=await getDoc(doc(db,"inpatientEncounters",currentEncId));
+    if(!snap.exists()) return;
+    const html=snap.data().dischargeSummaryHtml||null;
+    if(html){
+      editor.innerHTML=html;
+      noContent.style.display="none";
+      editorWrap.style.display="";
+    }
+  }catch(e){console.error("loadSummaryTab",e);}
+}
+
+document.getElementById("gen-summary-btn").onclick=async()=>{
+  const btn=document.getElementById("gen-summary-btn");
+  btn.disabled=true; btn.textContent="Generating…";
+  try{
+    const [encSnap,visitsSnap,medsSnap,vitalsSnap,chargesSnap]=await Promise.all([
+      getDoc(doc(db,"inpatientEncounters",currentEncId)),
+      getDocs(query(collection(db,"encounterVisits"),where("encounterId","==",currentEncId),orderBy("visitedAt","asc"))),
+      getDocs(query(collection(db,"encounterMedRequests"),where("encounterId","==",currentEncId),orderBy("requestedAt","asc"))),
+      getDocs(query(collection(db,"encounterVitals"),where("encounterId","==",currentEncId),orderBy("recordedAt","asc"))),
+      getDocs(query(collection(db,"encounterCharges"),where("encounterId","==",currentEncId),orderBy("createdAt","asc")))
+    ]);
+    if(!encSnap.exists()) return;
+    const e=encSnap.data();
+    const clinic=clinicSettings.clinicName||"Hospital";
+    const dlNo=drugLicenseNumber||e.drugLicenseNumber||"";
+    const bedDays=daysBetween(e.admittedAt,e.dischargedAt||new Date());
+    const th=`style="border:1px solid #ccc;padding:4px 8px;background:#f0f0f0;text-align:left;"`;
+    const td=`style="border:1px solid #ccc;padding:4px 8px;"`;
+    const tdr=`style="border:1px solid #ccc;padding:4px 8px;text-align:right;"`;
+    const tbStyle=`style="width:100%;border-collapse:collapse;margin-bottom:12px;font-size:12px;"`;
+
+    let html=`<h2 style="text-align:center;margin:0 0 2px;">${esc(clinic)}</h2>`;
+    if(dlNo) html+=`<p style="text-align:center;font-size:11px;color:#555;margin:2px 0;">Drug License No: ${esc(dlNo)}</p>`;
+    html+=`<h3 style="text-align:center;letter-spacing:1px;border-bottom:2px solid #333;padding-bottom:6px;margin:8px 0 14px;">DISCHARGE SUMMARY</h3>`;
+
+    html+=`<h4 style="margin:0 0 4px;">Patient Details</h4>
+<table ${tbStyle}><tr>
+<th ${th}>Name</th><td ${td}>${esc(e.patientName)}</td>
+<th ${th}>Age / Gender</th><td ${td}>${esc(e.patientAge||"")}${e.patientAge?" yrs,":""} ${esc(e.patientGender||"")}</td></tr>
+<tr><th ${th}>Mobile</th><td ${td}>${esc(e.patientMobile||"—")}</td>
+<th ${th}>Primary Doctor</th><td ${td}>Dr. ${esc(e.primaryDoctorName)}</td></tr>
+<tr><th ${th}>Bed</th><td ${td}>${esc(e.bedName)} — ${esc(e.bedWard)}</td>
+<th ${th}>Days</th><td ${td}>${bedDays}</td></tr>
+<tr><th ${th}>Admitted</th><td ${td}>${fmtDT(e.admittedAt)}</td>
+<th ${th}>Discharged</th><td ${td}>${fmtDT(e.dischargedAt)}</td></tr>
+</table>`;
+
+    html+=`<h4 style="margin:0 0 4px;">Diagnosis &amp; Clinical Summary</h4>
+<p style="border:1px dashed #aaa;padding:8px;min-height:50px;font-size:13px;">${esc(e.finalDiagnosis||"")||"<em style='color:#aaa;'>[Enter diagnosis]</em>"}</p>
+<h4 style="margin:8px 0 4px;">Condition on Discharge</h4>
+<p style="font-size:13px;">${esc(e.conditionOnDischarge||"")}</p>`;
+
+    if(!vitalsSnap.empty){
+      html+=`<h4 style="margin:8px 0 4px;">Vitals History</h4>
+<table ${tbStyle}><tr>
+<th ${th}>Date/Time</th><th ${th}>BP</th><th ${th}>Temp</th><th ${th}>Weight</th><th ${th}>SpO2</th><th ${th}>Notes</th></tr>`;
+      vitalsSnap.docs.forEach(d=>{const v=d.data();html+=`<tr>
+<td ${td}>${fmtDT(v.recordedAt)}</td><td ${td}>${v.bp||""}</td><td ${td}>${v.temp||""}</td>
+<td ${td}>${v.weight||""}</td><td ${td}>${v.spo2||""}</td><td ${td}>${esc(v.notes||"")}</td></tr>`;});
+      html+=`</table>`;
+    }
+
+    const hasNotes=visitsSnap.docs.some(d=>d.data().observations||d.data().prescription);
+    if(hasNotes){
+      html+=`<h4 style="margin:8px 0 4px;">Clinical Notes (by Visit)</h4>`;
+      visitsSnap.docs.forEach(d=>{
+        const v=d.data();
+        if(!v.observations&&!v.prescription) return;
+        html+=`<div style="margin-bottom:8px;border-left:3px solid #0F4C4F;padding-left:8px;font-size:12px;">
+<strong>Dr. ${esc(v.doctorName)}</strong> &mdash; ${fmtDT(v.visitedAt)}<br>
+${v.observations?`<b>Notes:</b> ${esc(v.observations)}<br>`:""}${v.prescription?`<b>Rx:</b> ${esc(v.prescription)}`:""}
+</div>`;
+      });
+    }
+
+    const allItems=medsSnap.docs.flatMap(d=>d.data().items||[]);
+    if(allItems.length){
+      html+=`<h4 style="margin:8px 0 4px;">Medications Administered</h4>
+<table ${tbStyle}><tr>
+<th ${th}>Medicine</th><th ${th}>Batch</th><th ${th}>Expiry</th><th ${th}>Qty</th><th ${th}>Unit</th><th ${th}>Amount</th></tr>`;
+      allItems.forEach(it=>{html+=`<tr>
+<td ${td}>${esc(it.itemName)}</td><td ${td}>${esc(it.batchNumber||"—")}</td><td ${td}>${esc(it.expiryDate||"—")}</td>
+<td ${tdr}>${it.netQty||0}</td><td ${td}>${esc(it.unit||"")}</td><td ${tdr}>&#x20B9;${fmt((it.netQty||0)*(it.unitCost||0))}</td></tr>`;});
+      html+=`</table>`;
+    }
+
+    if(!chargesSnap.empty){
+      html+=`<h4 style="margin:8px 0 4px;">Other Charges</h4>
+<table ${tbStyle}><tr><th ${th}>Description</th><th ${th}>Date</th><th ${th}>Amount</th></tr>`;
+      chargesSnap.docs.forEach(d=>{const ch=d.data();html+=`<tr>
+<td ${td}>${esc(ch.description)}</td><td ${td}>${fmtD(ch.chargeDate||ch.createdAt)}</td>
+<td ${tdr}>&#x20B9;${fmt(ch.total||ch.amount||0)}</td></tr>`;});
+      html+=`</table>`;
+    }
+
+    html+=`<h4 style="margin:8px 0 4px;">Follow-up Instructions</h4>
+<p style="border:1px dashed #aaa;padding:8px;min-height:40px;font-size:13px;">
+<em style="color:#aaa;">[Enter follow-up appointments, diet advice, activity restrictions…]</em></p>
+<h4 style="margin:8px 0 4px;">Medications at Home</h4>
+<p style="border:1px dashed #aaa;padding:8px;min-height:40px;font-size:13px;">
+<em style="color:#aaa;">[List discharge medications with dosage and duration]</em></p>`;
+
+    if(e.dischargeNotes){
+      html+=`<h4 style="margin:8px 0 4px;">Discharge Notes</h4><p style="font-size:13px;">${esc(e.dischargeNotes)}</p>`;
+    }
+
+    html+=`<br><div style="display:flex;justify-content:space-between;margin-top:28px;">
+<div style="text-align:center;">
+  <div style="border-top:1px solid #333;width:180px;padding-top:4px;font-size:12px;">Patient / Attendant Signature</div>
+</div>
+<div style="text-align:center;">
+  <div style="border-top:1px solid #333;width:180px;padding-top:4px;font-size:12px;">
+    Dr. ${esc(e.primaryDoctorName)}<br>Signature &amp; Stamp
+  </div>
+</div>
+</div>`;
+
+    const editor=document.getElementById("summary-editor");
+    editor.innerHTML=html;
+    document.getElementById("summary-no-content").style.display="none";
+    document.getElementById("summary-editor-wrap").style.display="";
+    document.getElementById("summary-save-status").textContent="Generated — click 💾 Save to keep this version.";
+  }catch(err){alert("Error generating summary: "+err.message);}
+  finally{btn.disabled=false;btn.textContent="⚡ Generate from Encounter Data";}
+};
+
+document.getElementById("save-summary-btn").onclick=async()=>{
+  const btn=document.getElementById("save-summary-btn");
+  btn.disabled=true; btn.textContent="Saving…";
+  try{
+    const html=document.getElementById("summary-editor").innerHTML;
+    await updateDoc(doc(db,"inpatientEncounters",currentEncId),{
+      dischargeSummaryHtml:html, dischargeSummaryUpdatedAt:serverTimestamp()
+    });
+    document.getElementById("summary-save-status").textContent="Saved ✓ — "+new Date().toLocaleTimeString();
+  }catch(e){alert("Save failed: "+e.message);}
+  finally{btn.disabled=false;btn.textContent="💾 Save";}
+};
+
+document.getElementById("delete-summary-btn").onclick=async()=>{
+  if(!confirm("Delete this discharge summary?\nYou can regenerate it from encounter data at any time.")) return;
+  try{
+    await updateDoc(doc(db,"inpatientEncounters",currentEncId),{
+      dischargeSummaryHtml:null, dischargeSummaryUpdatedAt:null
+    });
+    document.getElementById("summary-editor").innerHTML="";
+    document.getElementById("summary-editor-wrap").style.display="none";
+    document.getElementById("summary-no-content").style.display="";
+    document.getElementById("summary-save-status").textContent="";
+  }catch(e){alert("Delete failed: "+e.message);}
+};
+
+document.getElementById("print-saved-summary-btn").onclick=()=>{
+  const html=document.getElementById("summary-editor").innerHTML;
+  if(!html.trim()){alert("Nothing to print. Save the summary first.");return;}
+  const win=window.open("","_blank","width=820,height=950");
+  win.document.write("<!DOCTYPE html><html><head><title>Discharge Summary</title>"
+    +"<style>body{font-family:Arial,sans-serif;font-size:13px;padding:24px 32px;color:#111;}"
+    +"h2,h3,h4{color:#111;}table{width:100%;border-collapse:collapse;margin-bottom:12px;}"
+    +"th,td{border:1px solid #ccc;padding:4px 8px;text-align:left;}th{background:#f0f0f0;}"
+    +"@media print{body{padding:16px;}}</style></head><body>"
+    +html
+    +"<p style='text-align:center;margin-top:24px;color:#999;font-size:11px;'>Printed on "
+    +new Date().toLocaleString()
+    +"</p></body></html>");
+  win.document.close(); win.print();
+};
+
 // ── DISCHARGE ──
 window.openDischarge=async(encId)=>{
   currentEncId=encId;
   const snap=await getDoc(doc(db,"inpatientEncounters",encId));
   if(!snap.exists()) return;
   currentEnc={id:snap.id,...snap.data()};
+  // Check for pending bills before allowing discharge
+  const [visitsSnap,medsSnap,chargesSnap,invoicesSnap]=await Promise.all([
+    getDocs(query(collection(db,"encounterVisits"),where("encounterId","==",encId))),
+    getDocs(query(collection(db,"encounterMedRequests"),where("encounterId","==",encId))),
+    getDocs(query(collection(db,"encounterCharges"),where("encounterId","==",encId))),
+    getDocs(query(collection(db,"encounterInvoices"),where("encounterId","==",encId)))
+  ]);
+  const now2=new Date();
+  const totalDays=daysBetween(currentEnc.admittedAt,now2);
+  const billedDaysFromInv2=invoicesSnap.docs.reduce((s,d)=>s+(d.data().lineItems||[]).filter(li=>li.type==="bed").reduce((ss,li)=>ss+(Number(li.days)||0),0),0);
+  const billedDays=Math.max(currentEnc.billedRentDays||0,billedDaysFromInv2);
+  const hasPendingRent=(currentEnc.dailyRent||0)>0 && totalDays>billedDays;
+  const hasUnbilledVisits=visitsSnap.docs.some(d=>!d.data().invoiceId&&(d.data().visitCharge||0)>0);
+  const hasUnbilledMeds=medsSnap.docs.some(d=>{
+    if(d.data().invoiceId) return false;
+    return (d.data().items||[]).some(it=>(it.netQty||0)*(it.unitCost||0)>0);
+  });
+  const hasUnbilledCharges=chargesSnap.docs.some(d=>!d.data().invoiceId&&(d.data().total||d.data().amount||0)>0);
+  const hasInvoiceBalance=invoicesSnap.docs.some(d=>(d.data().balanceDue||0)>0.01);
+  const pendingItems=[];
+  if(hasPendingRent) pendingItems.push("bed rent");
+  if(hasUnbilledVisits) pendingItems.push("doctor visits");
+  if(hasUnbilledMeds) pendingItems.push("medicines");
+  if(hasUnbilledCharges) pendingItems.push("other charges");
+  if(hasInvoiceBalance) pendingItems.push("invoice balance due");
+  if(pendingItems.length){
+    alert("Cannot discharge — pending: "+pendingItems.join(", ")+".\n\nIn the Bill tab:\n• Select items → '+ Generate Invoice'\n• Use the 'Discount / Write-off ₹' field to waive any amount\n• Set Amount Paid = 0 and Discount = full amount to fully write off\n• For existing invoices with balance: use the 'Write off' button");
+    openEncDetails(encId,"bill");
+    return;
+  }
   const now=new Date(); now.setSeconds(0,0);
   document.getElementById("dc-datetime").value=now.toISOString().slice(0,16);
   document.getElementById("dc-diagnosis").value="";
@@ -1147,36 +1877,38 @@ document.getElementById("dc-save").onclick=async()=>{
 // ── CLOSE ENCOUNTER ──
 window.openCloseEnc=async(encId)=>{
   currentEncId=encId;
-  const snap=await getDoc(doc(db,"inpatientEncounters",encId));
+  const [snap,invSnap]=await Promise.all([
+    getDoc(doc(db,"inpatientEncounters",encId)),
+    getDocs(query(collection(db,"encounterInvoices"),where("encounterId","==",encId)))
+  ]);
   if(!snap.exists()) return;
   currentEnc={id:snap.id,...snap.data()};
-  const now=currentEnc.dischargedAt?currentEnc.dischargedAt:new Date();
-  const bedDays=daysBetween(currentEnc.admittedAt,now);
-  const bedTotal=bedDays*(currentEnc.dailyRent||0);
+  // Derive totals from this encounter's invoices only — not from stale encounter-level fields
+  const totalInvoiced=invSnap.docs.reduce((s,d)=>s+Number(d.data().grandTotal||0),0);
+  const totalPaid=invSnap.docs.reduce((s,d)=>s+Number(d.data().amountPaid||0),0);
+  const totalDiscount=invSnap.docs.reduce((s,d)=>s+Number(d.data().discountAmount||0)+Number(d.data().writeOffAmount||0),0);
+  const totalBalance=invSnap.docs.reduce((s,d)=>s+Number(d.data().balanceDue||0),0);
+  const allSettled=invSnap.docs.length>0&&invSnap.docs.every(d=>(d.data().balanceDue||0)<0.01);
   document.getElementById("close-enc-bill").innerHTML=`
     <div class="bill-row"><span>Patient</span><strong>${esc(currentEnc.patientName)}</strong></div>
-    <div class="bill-row"><span>Bed charges</span><span>₹${fmt(bedTotal)}</span></div>
-    <div class="bill-row"><span>Amount Paid</span><span>₹${fmt(currentEnc.amountPaid||0)}</span></div>
-    <div class="bill-row"><span>Bill Status</span><span class="badge badge-${(currentEnc.billStatus||"pending")==="settled"?"sage":"amber"}">${currentEnc.billStatus||"pending"}</span></div>`;
+    <div class="bill-row"><span>Invoices for this encounter</span><span>${invSnap.docs.length}</span></div>
+    <div class="bill-row"><span>Total Invoiced</span><span>₹${fmt(totalInvoiced)}</span></div>
+    ${totalDiscount>0?`<div class="bill-row"><span>Discount / Write-off</span><span>− ₹${fmt(totalDiscount)}</span></div>`:""}
+    <div class="bill-row"><span>Total Paid</span><span>₹${fmt(totalPaid)}</span></div>
+    <div class="bill-row"><span>Balance Due (this encounter)</span><strong style="color:${totalBalance>0.01?"#dc2626":"#16a34a"}">₹${fmt(totalBalance)}</strong></div>
+    <div class="bill-row"><span>Status</span><span class="badge badge-${allSettled?"sage":"amber"}">${allSettled?"Fully Settled":"Pending"}</span></div>`;
   document.getElementById("modal-close-enc").style.display="flex";
 };
 document.getElementById("close-enc-cancel").onclick=()=>document.getElementById("modal-close-enc").style.display="none";
 document.getElementById("close-enc-confirm").onclick=async()=>{
   const btn=document.getElementById("close-enc-confirm"); btn.disabled=true;
   try{
+    // currentEnc was freshly loaded by openCloseEnc — no need for a transaction read
     const bedId=currentEnc?.bedId||null;
-    await runTransaction(db,async tx=>{
-      const encRef=doc(db,"inpatientEncounters",currentEncId);
-      const encSnap=await tx.get(encRef);
-      if(!encSnap.exists()) throw new Error("Encounter not found");
-      const resolvedBedId=encSnap.data().bedId||bedId;
-      tx.update(encRef,{status:"closed",updatedAt:serverTimestamp()});
-      if(resolvedBedId){
-        const bedRef=doc(db,"beds",resolvedBedId);
-        const bedSnap=await tx.get(bedRef);
-        if(bedSnap.exists()) tx.update(bedRef,{status:"available",currentEncounterId:null,updatedAt:serverTimestamp()});
-      }
-    });
+    const batch=writeBatch(db);
+    batch.update(doc(db,"inpatientEncounters",currentEncId),{status:"closed",updatedAt:serverTimestamp()});
+    if(bedId) batch.update(doc(db,"beds",bedId),{status:"available",currentEncounterId:null,updatedAt:serverTimestamp()});
+    await batch.commit();
     document.getElementById("modal-close-enc").style.display="none";
   }catch(e){alert("Error closing encounter: "+e.message); console.error(e);}
   btn.disabled=false;
@@ -1205,6 +1937,14 @@ window.printSummary=async(encId)=>{
   const gstTotal=chargesSnap.docs.reduce((s,d)=>s+Number(d.data().gstAmount||0),0);
   const grand=bedTotal+visitTotal+medTotal+otherTotal+gstTotal;
   const totalPaid=invoicesSnap.docs.reduce((s,d)=>s+Number(d.data().amountPaid||0),0);
+  const totalDiscounts=invoicesSnap.docs.reduce((s,d)=>s+Number(d.data().discountAmount||0)+Number(d.data().writeOffAmount||0),0);
+  // Derive billed totals from invoices (authoritative) — raw charge sums used only for the breakdown table
+  const totalInvoiced=invoicesSnap.docs.reduce((s,d)=>s+Number(d.data().grandTotal||0),0);
+  const totalBalance=invoicesSnap.docs.reduce((s,d)=>s+Number(d.data().balanceDue||0),0);
+  // netGrand: what the patient should pay = billed - discounts.
+  // Use totalInvoiced when invoices exist; fall back to raw grand for encounters with no invoices yet.
+  const billingBasis=invoicesSnap.docs.length>0?totalInvoiced:grand;
+  const netGrand=Math.max(0,billingBasis-totalDiscounts);
 
   const win=window.open("","_blank","width=800,height=900");
   win.document.write(`<!DOCTYPE html><html><head><title>Discharge Summary</title>
@@ -1241,19 +1981,22 @@ ${v.prescription?`<br><b>Rx:</b> ${esc(v.prescription)}`:""}
 <table><thead><tr><th>Description</th><th>Date</th><th>Amount</th><th>GST</th><th>Total</th></tr></thead>
 <tbody>${chargesSnap.docs.map(d=>{const c=d.data();return `<tr><td>${esc(c.description)}</td><td>${fmtD(c.chargeDate||c.createdAt)}</td><td class="right">₹${fmt(c.amount)}</td><td class="right">₹${fmt(c.gstAmount)}</td><td class="right">₹${fmt(c.total)}</td></tr>`;}).join("")||'<tr><td colspan="5">—</td></tr>'}</tbody></table>
 <h2>Bill Summary</h2>
+${(()=>{const admD=toDate(e.admittedAt);const disD=e.dischargedAt?toDate(e.dischargedAt):null;const sameDay=disD&&admD.toDateString()===disD.toDateString()&&(disD-admD)<86400000;return sameDay?`<p style="background:#fef3c7;border:1px solid #fbbf24;padding:4px 8px;border-radius:4px;font-size:11px;color:#92400e;margin-bottom:6px;">Note: admitted and discharged on the same day — minimum 1 day bed charge applies per policy.</p>`:"";})()}
 <table><tbody>
-<tr><td>Bed charges (${bedDays} days × ₹${fmt(e.dailyRent||0)})</td><td class="right">₹${fmt(bedTotal)}</td></tr>
+<tr><td>Bed charges (${bedDays} day${bedDays>1?"s":""} × ₹${fmt(e.dailyRent||0)})</td><td class="right">₹${fmt(bedTotal)}</td></tr>
 <tr><td>Visit charges</td><td class="right">₹${fmt(visitTotal)}</td></tr>
 <tr><td>Medicine charges</td><td class="right">₹${fmt(medTotal)}</td></tr>
-<tr><td>Other charges</td><td class="right">₹${fmt(otherTotal)}</td></tr>
-<tr><td>GST</td><td class="right">₹${fmt(gstTotal)}</td></tr>
-<tr class="total-row"><td>Grand Total</td><td class="right">₹${fmt(grand)}</td></tr>
-<tr><td>Total Paid</td><td class="right">₹${fmt(totalPaid)}</td></tr>
-<tr><td>Balance</td><td class="right">₹${fmt(grand-totalPaid)}</td></tr>
+<tr><td>Other charges + GST</td><td class="right">₹${fmt(otherTotal+gstTotal)}</td></tr>
+<tr class="total-row"><td>Gross Total (charges)</td><td class="right">₹${fmt(grand)}</td></tr>
+${invoicesSnap.docs.length>0?`<tr style="color:#555;"><td>Total Invoiced</td><td class="right">₹${fmt(totalInvoiced)}</td></tr>`:""}
+${totalDiscounts>0?`<tr style="color:#d97706;"><td>Discount / Write-off</td><td class="right">- ₹${fmt(totalDiscounts)}</td></tr>
+<tr class="total-row"><td>Net Payable</td><td class="right">₹${fmt(netGrand)}</td></tr>`:""}
+<tr><td>Total Paid (Cash / UPI / Card)</td><td class="right">₹${fmt(totalPaid)}</td></tr>
+<tr${totalBalance>0.01?' style="color:red;"':''} ><td>Balance Due</td><td class="right">₹${fmt(totalBalance)}</td></tr>
 </tbody></table>
 ${invoicesSnap.docs.length?`<h2>Payment History</h2>
-<table><thead><tr><th>Invoice #</th><th>Date</th><th>Amount</th><th>Paid</th><th>Mode</th><th>Balance</th></tr></thead>
-<tbody>${invoicesSnap.docs.map(d=>{const inv=d.data();return `<tr><td>${esc(inv.invoiceNumber)}</td><td>${fmtD(inv.createdAt)}</td><td class="right">₹${fmt(inv.grandTotal)}</td><td class="right">₹${fmt(inv.amountPaid)}</td><td>${esc(inv.paymentMode||"")}</td><td class="right">₹${fmt(inv.balanceDue||0)}</td></tr>`;}).join("")}</tbody></table>`:""}
+<table><thead><tr><th>Invoice #</th><th>Date</th><th>Gross</th><th>Discount/Waiver</th><th>Net Payable</th><th>Paid</th><th>Mode</th><th>Balance</th></tr></thead>
+<tbody>${invoicesSnap.docs.map(d=>{const inv=d.data();const disc=(inv.discountAmount||0)+(inv.writeOffAmount||0);const net=inv.netPayable!==undefined?inv.netPayable:inv.grandTotal-(inv.discountAmount||0);return `<tr><td>${esc(inv.invoiceNumber)}</td><td>${fmtD(inv.createdAt)}</td><td class="right">₹${fmt(inv.grandTotal)}</td><td class="right">${disc>0?' style="color:#d97706;"':''}>${disc>0?'- ₹'+fmt(disc):'—'}</td><td class="right">₹${fmt(net)}</td><td class="right">₹${fmt(inv.amountPaid)}</td><td>${esc(inv.paymentMode||"")}</td><td class="right">₹${fmt(inv.balanceDue||0)}</td></tr>`;}).join("")}</tbody></table>`:""}
 ${e.dischargeNotes?`<h2>Discharge Notes</h2><p>${esc(e.dischargeNotes)}</p>`:""}
 <p style="text-align:center;margin-top:24px;color:#999;font-size:11px;">Generated on ${new Date().toLocaleString()}</p>
 </body></html>`);
