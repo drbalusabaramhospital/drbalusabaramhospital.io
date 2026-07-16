@@ -104,6 +104,14 @@
         { "fieldPath": "encounterId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "encounterInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "encounterId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

@@ -245,6 +245,10 @@
       <div class="field"><label>Reorder at (qty)</label><input id="item-reorder-at" type="number" min="0" value="10" inputmode="numeric" /></div>
       <div class="field"><label>Suggest reorder qty</label><input id="item-reorder-qty" type="number" min="1" value="50" inputmode="numeric" /></div>
     </div>
+    <div class="field-row">
+      <div class="field"><label>Batch Number</label><input id="item-batch" type="text" placeholder="e.g. BT-2024-001" /></div>
+      <div class="field"><label>Expiry Date</label><input id="item-expiry" type="date" /></div>
+    </div>
     <div class="field" id="item-stock-field">
       <label>Opening stock</label>
       <input id="item-stock" type="number" min="0" value="0" inputmode="numeric" />
@@ -590,6 +594,8 @@ function openItemModal(item) {
   el("item-sell").value        = item?.sellingPrice || 0;
   el("item-reorder-at").value  = item?.reorderLevel ?? 10;
   el("item-reorder-qty").value = item?.reorderQty ?? 50;
+  el("item-batch").value       = item?.batchNumber || "";
+  el("item-expiry").value      = item?.expiryDate || "";
   el("item-stock").value       = item?.currentStock || 0;
   el("item-stock-field").style.display = item ? "none" : "";
   el("item-modal").style.display = "flex";
@@ -611,6 +617,8 @@ el("item-save").onclick = async () => {
     sellingPrice:  Number(el("item-sell").value) || 0,
     reorderLevel:  Number(el("item-reorder-at").value) || 0,
     reorderQty:    Number(el("item-reorder-qty").value) || 1,
+    batchNumber:   el("item-batch").value.trim() || "",
+    expiryDate:    el("item-expiry").value || "",
     updatedAt:     serverTimestamp(),
   };
   const editId = el("item-edit-id").value;

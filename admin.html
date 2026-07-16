@@ -108,6 +108,12 @@
           <input id="upi-code-input" placeholder="Leave blank if not applicable" />
         </div>
         <hr class="section-divider" />
+        <div class="field">
+          <label for="dl-number-input">Drug License (DL) Number</label>
+          <input id="dl-number-input" placeholder="e.g. DL/MH/123456" />
+          <p class="helper">Printed on inpatient bills and discharge summaries.</p>
+        </div>
+        <hr class="section-divider" />
         <p class="small muted" style="margin-bottom:0.75rem;">Prescription image settings — images are compressed in the browser before saving to the database. Lower quality and smaller resolution reduce storage size significantly.</p>
         <div class="field-row">
           <div class="field">
@@ -440,6 +446,7 @@ await authReady;
     if (d.upiVpa) document.getElementById("upi-vpa-input").value = d.upiVpa;
     if (d.upiMerchantName) document.getElementById("upi-name-input").value = d.upiMerchantName;
     if (d.upiMerchantCode) document.getElementById("upi-code-input").value = d.upiMerchantCode;
+    if (d.drugLicenseNumber) document.getElementById("dl-number-input").value = d.drugLicenseNumber;
     if (d.prescriptionQuality) document.getElementById("rx-quality-input").value = d.prescriptionQuality;
     if (d.prescriptionMaxPx) document.getElementById("rx-maxpx-input").value = d.prescriptionMaxPx;
     if (d.visitHistoryCount !== undefined) document.getElementById("visit-history-count-input").value = d.visitHistoryCount;
@@ -467,6 +474,7 @@ document.getElementById("branding-form").addEventListener("submit", async (e) =>
   const upiVpa = document.getElementById("upi-vpa-input").value.trim();
   const upiMerchantName = document.getElementById("upi-name-input").value.trim();
   const upiMerchantCode = document.getElementById("upi-code-input").value.trim();
+  const drugLicenseNumber = document.getElementById("dl-number-input").value.trim();
   const prescriptionQuality = Number(document.getElementById("rx-quality-input").value);
   const prescriptionMaxPx = Number(document.getElementById("rx-maxpx-input").value);
   const visitHistoryCount = Number(document.getElementById("visit-history-count-input").value);
@@ -481,6 +489,7 @@ document.getElementById("branding-form").addEventListener("submit", async (e) =>
     upiVpa: upiVpa || null,
     upiMerchantName: upiMerchantName || null,
     upiMerchantCode: upiMerchantCode || null,
+    drugLicenseNumber: drugLicenseNumber || null,
     prescriptionQuality,
     prescriptionMaxPx,
     visitHistoryCount,
