@@ -85,30 +85,33 @@ document.addEventListener("DOMContentLoaded",()=>{
       </div>
 
       <div id="pane-active">
-        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;align-items:center;">
-          <input id="filter-act-q" type="text" class="form-input" style="flex:1;min-width:150px;" placeholder="Search name / mobile / bed…" />
-          <select id="filter-act-doc" class="form-input" style="min-width:130px;"><option value="">All Doctors</option></select>
-          <select id="filter-act-ward" class="form-input" style="min-width:110px;"><option value="">All Wards</option></select>
+        <div style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.75rem;padding:0.35rem 0.6rem;background:var(--surface-alt,#f0f4ff);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;">
+          <span style="font-size:0.75rem;font-weight:600;color:var(--primary,#4f46e5);white-space:nowrap;">🔍 Filter:</span>
+          <input id="filter-act-q" type="text" class="form-input" style="flex:1;min-width:140px;max-width:220px;padding:0.25rem 0.5rem;font-size:0.82rem;" placeholder="Name / mobile / bed…" />
+          <select id="filter-act-doc" class="form-input" style="min-width:120px;padding:0.25rem 0.5rem;font-size:0.82rem;"><option value="">All Doctors</option></select>
+          <select id="filter-act-ward" class="form-input" style="min-width:100px;padding:0.25rem 0.5rem;font-size:0.82rem;"><option value="">All Wards</option></select>
         </div>
         <div id="active-list"><p class="muted">Loading…</p></div>
         <div id="pagination-active" style="display:flex;align-items:center;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;font-size:0.84rem;color:var(--ink-soft);"></div>
       </div>
       <div id="pane-discharged" style="display:none;">
-        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;align-items:center;">
-          <input id="filter-dis-q" type="text" class="form-input" style="flex:1;min-width:150px;" placeholder="Search name / mobile…" />
-          <select id="filter-dis-doc" class="form-input" style="min-width:130px;"><option value="">All Doctors</option></select>
-          <input id="filter-dis-from" type="date" class="form-input" style="min-width:130px;" title="Admitted from" />
-          <input id="filter-dis-to" type="date" class="form-input" style="min-width:130px;" title="Admitted to" />
+        <div style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.75rem;padding:0.35rem 0.6rem;background:var(--surface-alt,#f0f4ff);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;">
+          <span style="font-size:0.75rem;font-weight:600;color:var(--primary,#4f46e5);white-space:nowrap;">🔍 Filter:</span>
+          <input id="filter-dis-q" type="text" class="form-input" style="flex:1;min-width:140px;max-width:220px;padding:0.25rem 0.5rem;font-size:0.82rem;" placeholder="Name / mobile…" />
+          <select id="filter-dis-doc" class="form-input" style="min-width:120px;padding:0.25rem 0.5rem;font-size:0.82rem;"><option value="">All Doctors</option></select>
+          <input id="filter-dis-from" type="date" class="form-input" style="min-width:130px;padding:0.25rem 0.5rem;font-size:0.82rem;" title="Admitted from" />
+          <input id="filter-dis-to" type="date" class="form-input" style="min-width:130px;padding:0.25rem 0.5rem;font-size:0.82rem;" title="Admitted to" />
         </div>
         <div id="discharged-list"><p class="muted">Loading…</p></div>
         <div id="pagination-discharged" style="display:flex;align-items:center;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;font-size:0.84rem;color:var(--ink-soft);"></div>
       </div>
       <div id="pane-closed" style="display:none;">
-        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;align-items:center;">
-          <input id="filter-cls-q" type="text" class="form-input" style="flex:1;min-width:150px;" placeholder="Search name / mobile…" />
-          <select id="filter-cls-doc" class="form-input" style="min-width:130px;"><option value="">All Doctors</option></select>
-          <input id="filter-cls-from" type="date" class="form-input" style="min-width:130px;" title="Discharged from" />
-          <input id="filter-cls-to" type="date" class="form-input" style="min-width:130px;" title="Discharged to" />
+        <div style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.75rem;padding:0.35rem 0.6rem;background:var(--surface-alt,#f0f4ff);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;">
+          <span style="font-size:0.75rem;font-weight:600;color:var(--primary,#4f46e5);white-space:nowrap;">🔍 Filter:</span>
+          <input id="filter-cls-q" type="text" class="form-input" style="flex:1;min-width:140px;max-width:220px;padding:0.25rem 0.5rem;font-size:0.82rem;" placeholder="Name / mobile…" />
+          <select id="filter-cls-doc" class="form-input" style="min-width:120px;padding:0.25rem 0.5rem;font-size:0.82rem;"><option value="">All Doctors</option></select>
+          <input id="filter-cls-from" type="date" class="form-input" style="min-width:130px;padding:0.25rem 0.5rem;font-size:0.82rem;" title="Discharged from" />
+          <input id="filter-cls-to" type="date" class="form-input" style="min-width:130px;padding:0.25rem 0.5rem;font-size:0.82rem;" title="Discharged to" />
         </div>
         <div id="closed-list"><p class="muted">Loading…</p></div>
         <div id="pagination-closed" style="display:flex;align-items:center;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;font-size:0.84rem;color:var(--ink-soft);"></div>
