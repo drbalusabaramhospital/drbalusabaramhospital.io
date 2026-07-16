@@ -450,13 +450,13 @@ function renderEncList(list, containerId, status){
 }
 
 // ── BED OVERVIEW ──
-let allBeds=[];
-async function loadBeds(){
-  try{
-    const snap=await getDocs(query(collection(db,"beds"),orderBy("ward")));
+let allBeds=[], unsubBeds=null;
+function loadBeds(){
+  if(unsubBeds) return; // already subscribed
+  unsubBeds=onSnapshot(query(collection(db,"beds"),orderBy("ward")),snap=>{
     allBeds=snap.docs.map(d=>({id:d.id,...d.data()}));
     renderBeds();
-  }catch(e){}
+  },e=>console.error("Beds snapshot error:",e));
 }
 
 function renderBeds(){
@@ -1164,19 +1164,21 @@ document.getElementById("close-enc-cancel").onclick=()=>document.getElementById(
 document.getElementById("close-enc-confirm").onclick=async()=>{
   const btn=document.getElementById("close-enc-confirm"); btn.disabled=true;
   try{
+    const bedId=currentEnc?.bedId||null;
     await runTransaction(db,async tx=>{
       const encRef=doc(db,"inpatientEncounters",currentEncId);
       const encSnap=await tx.get(encRef);
       if(!encSnap.exists()) throw new Error("Encounter not found");
-      const bedId=encSnap.data().bedId;
+      const resolvedBedId=encSnap.data().bedId||bedId;
       tx.update(encRef,{status:"closed",updatedAt:serverTimestamp()});
-      if(bedId){
-        const bedRef=doc(db,"beds",bedId);
-        tx.update(bedRef,{status:"available",currentEncounterId:null});
+      if(resolvedBedId){
+        const bedRef=doc(db,"beds",resolvedBedId);
+        const bedSnap=await tx.get(bedRef);
+        if(bedSnap.exists()) tx.update(bedRef,{status:"available",currentEncounterId:null,updatedAt:serverTimestamp()});
       }
     });
     document.getElementById("modal-close-enc").style.display="none";
-  }catch(e){alert("Error: "+e.message);}
+  }catch(e){alert("Error closing encounter: "+e.message); console.error(e);}
   btn.disabled=false;
 };
 
