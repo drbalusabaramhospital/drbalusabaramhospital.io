@@ -338,7 +338,8 @@ const esc = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replac
 const fmt = n => Number(n||0).toFixed(2);
 const fmtDT = ts => { if(!ts) return "—"; const d=ts.toDate?ts.toDate():new Date(ts); return d.toLocaleDateString()+' '+d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); };
 const fmtD = ts => { if(!ts) return "—"; const d=ts.toDate?ts.toDate():new Date(ts); return d.toLocaleDateString(); };
-const daysBetween = (a,b) => { const ms=Math.max(0,(b||new Date()).getTime()-(a.toDate?a.toDate():new Date(a)).getTime()); return Math.max(1, Math.ceil(ms/86400000)); };
+const toDate = v => v ? (v.toDate ? v.toDate() : new Date(v)) : new Date();
+const daysBetween = (a,b) => { const ms=Math.max(0,toDate(b).getTime()-toDate(a).getTime()); return Math.max(1, Math.ceil(ms/86400000)); };
 
 let currentUser=null, userRole="doctor", clinicId=null;
 let inventoryItems=[], doctorsList=[], clinicSettings={};
