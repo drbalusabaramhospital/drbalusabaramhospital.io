@@ -64,6 +64,46 @@
         { "fieldPath": "date",        "order": "ASCENDING"  },
         { "fieldPath": "requestedAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "inpatientEncounters",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "admittedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "encounterVisits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "encounterId", "order": "ASCENDING" },
+        { "fieldPath": "visitedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "encounterMedRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "encounterId", "order": "ASCENDING" },
+        { "fieldPath": "requestedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "encounterVitals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "encounterId", "order": "ASCENDING" },
+        { "fieldPath": "recordedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "encounterCharges",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "encounterId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

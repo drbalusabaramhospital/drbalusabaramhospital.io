@@ -412,9 +412,9 @@ if (userSnap.exists()) {
   const role = userSnap.data().role;
   const nav = document.getElementById("nav-links");
   if (role === "doctor") {
-    nav.innerHTML = `<a href="doctor.html">My Queue</a><a href="patients.html">Patients</a><a href="billing.html">Billing</a><a href="inventory.html" class="active">Inventory</a><a href="board.html">Queue Board</a>`;
+    nav.innerHTML = `<a href="doctor.html">My Queue</a><a href="patients.html">Patients</a><a href="billing.html">Billing</a><a href="inventory.html" class="active">Inventory</a><a href="inpatient.html">Inpatient</a><a href="board.html">Queue Board</a>`;
   } else if (role === "admin") {
-    nav.innerHTML = `<a href="admin.html">Admin Setup</a><a href="backup.html">Backup</a><a href="reception.html">Reception</a><a href="patients.html">Patients</a><a href="billing.html">Billing</a><a href="inventory.html" class="active">Inventory</a><a href="board.html">Queue Board</a>`;
+    nav.innerHTML = `<a href="admin.html">Admin Setup</a><a href="backup.html">Backup</a><a href="reception.html">Reception</a><a href="patients.html">Patients</a><a href="billing.html">Billing</a><a href="inventory.html" class="active">Inventory</a><a href="inpatient.html">Inpatient</a><a href="board.html">Queue Board</a>`;
   }
 }
 

@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<title>Inpatient — Clinic Queue</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" type="image/svg+xml" href="assets/icon.svg" />
+<link rel="stylesheet" href="css/styles.css" />
+<style>
+.modal-bg{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(28,36,34,0.55);z-index:100;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:1.5rem;}
+.modal-box{background:var(--paper);border-radius:var(--radius);padding:1.5rem;width:100%;max-width:560px;box-shadow:0 8px 32px rgba(15,76,79,0.18);}
+.modal-box.wide{max-width:780px;}
+.modal-title{font-size:1.05rem;font-weight:700;color:var(--teal-900);margin:0 0 1rem;}
+.modal-footer{display:flex;justify-content:flex-end;gap:0.6rem;margin-top:1rem;padding-top:0.9rem;border-top:1px solid var(--line);}
+.enc-card{border:1px solid var(--line);border-radius:var(--radius);padding:0.9rem 1rem;margin-bottom:0.7rem;border-left:4px solid var(--teal-500);}
+.enc-card.discharged{border-left-color:var(--amber-500);}
+.enc-card.closed{border-left-color:var(--sage-500);opacity:0.85;}
+.enc-meta{font-size:0.82rem;color:var(--ink-soft);margin-top:0.25rem;}
+.enc-actions{display:flex;gap:0.4rem;flex-wrap:wrap;margin-top:0.6rem;}
+.bed-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:0.75rem;margin-top:0.5rem;}
+.bed-card{border:1px solid var(--line);border-radius:var(--radius);padding:0.75rem;font-size:0.85rem;}
+.bed-available{border-left:4px solid var(--sage-500);background:var(--sage-100);}
+.bed-occupied{border-left:4px solid var(--amber-500);background:var(--amber-100);}
+.sub-tabs{display:flex;gap:0;border-bottom:2px solid var(--line);margin-bottom:0.9rem;flex-wrap:wrap;}
+.sub-tab{background:none;border:none;padding:0.45rem 0.9rem;cursor:pointer;color:var(--ink-soft);font-size:0.88rem;border-bottom:2px solid transparent;margin-bottom:-2px;}
+.sub-tab.active{color:var(--teal-700);border-bottom-color:var(--teal-700);font-weight:600;}
+.items-sub{width:100%;font-size:0.82rem;border-collapse:collapse;margin-top:0.4rem;}
+.items-sub th{padding:0.28rem 0.5rem;background:var(--paper-dim);font-weight:600;color:var(--ink-soft);border-bottom:1px solid var(--line);}
+.items-sub td{padding:0.28rem 0.5rem;border-bottom:1px solid var(--line);}
+.items-sub tr:last-child td{border-bottom:none;}
+.bill-row{display:flex;justify-content:space-between;padding:0.3rem 0;font-size:0.9rem;border-bottom:1px solid var(--line);}
+.bill-row.total{font-weight:700;font-size:1rem;border-bottom:none;margin-top:0.3rem;}
+.visit-card,.vital-card,.charge-card{border:1px solid var(--line);border-radius:6px;padding:0.7rem 0.85rem;margin-bottom:0.55rem;font-size:0.87rem;}
+.med-req-card{border:1px solid var(--line);border-radius:6px;padding:0.7rem 0.85rem;margin-bottom:0.55rem;}
+.med-req-card.open{border-left:4px solid var(--amber-500);}
+.med-req-card.partial_return{border-left:4px solid var(--teal-500);}
+.med-req-card.closed{border-left:4px solid var(--sage-500);opacity:0.85;}
+.line-item-row{display:grid;grid-template-columns:1fr 90px 28px;gap:0.4rem;align-items:center;margin-bottom:0.35rem;}
+</style>
+<script>
+(function(){const _t=localStorage.getItem("clinic-queue-theme")||"light";
+document.addEventListener("DOMContentLoaded",()=>{
+  if(_t==="dark")document.body.classList.add("theme-dark");
+  if(_t==="midnight")document.body.classList.add("theme-midnight");
+  if(_t==="forest")document.body.classList.add("theme-forest");
+  if(_t==="sunset")document.body.classList.add("theme-sunset");
+});})();
+</script>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="brand"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" width="28" height="28" aria-hidden="true" style="flex-shrink:0;border-radius:6px;">
+  <rect width="72" height="72" rx="16" fill="white"/>
+  <text x="36" y="37" text-anchor="middle" font-size="28" font-weight="800" fill="#0F4C4F" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif">Q</text>
+  <polyline points="8,56 15,56 19,48 23,64 27,44 31,60 35,56 64,56" fill="none" stroke="#E8A23D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg> <span data-clinic-name>Clinic Queue</span></div>
+    <nav id="nav-links">
+      <a href="reception.html" id="nav-reception">Reception</a>
+      <a href="patients.html">Patients</a>
+      <a href="billing.html">Billing</a>
+      <a href="inventory.html">Inventory</a>
+      <a href="inpatient.html" class="active">Inpatient</a>
+      <a href="board.html">Queue Board</a>
+    </nav>
+    <div class="user-pill"><span id="user-email">—</span><button id="logout-btn">Sign out</button></div>
+    <button id="theme-toggle-btn" title="Switch theme" style="background:none;border:none;cursor:pointer;font-size:1.1rem;padding:0.2rem 0.4rem;opacity:0.8;" aria-label="Switch theme">🎨</button>
+  </header>
+
+  <main class="page">
+    <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.5rem;">
+      <div><h1>Inpatient (IPD)</h1><p>Manage bed admissions, encounters, billing, and discharge summaries.</p></div>
+      <button class="btn btn-primary" id="admit-btn">+ New Admission</button>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;gap:0;border-bottom:2px solid var(--line);margin-bottom:1rem;flex-wrap:wrap;">
+        <button class="tab-btn tab-active" id="tab-active">Active</button>
+        <button class="tab-btn" id="tab-discharged">Discharged</button>
+        <button class="tab-btn" id="tab-closed">Closed</button>
+        <button class="tab-btn" id="tab-beds">Bed Overview</button>
+      </div>
+
+      <div id="pane-active">
+        <div id="active-list"><p class="muted">Loading…</p></div>
+      </div>
+      <div id="pane-discharged" style="display:none;">
+        <div id="discharged-list"><p class="muted">Loading…</p></div>
+      </div>
+      <div id="pane-closed" style="display:none;">
+        <div id="closed-list"><p class="muted">Loading…</p></div>
+      </div>
+      <div id="pane-beds" style="display:none;">
+        <div id="bed-grid-cont"><p class="muted">Loading beds…</p></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ═══ ADMISSION MODAL ═══ -->
+<div class="modal-bg" id="modal-admit" style="display:none;">
+  <div class="modal-box">
+    <p class="modal-title">New Admission</p>
+    <div style="margin-bottom:0.8rem;">
+      <label class="form-label">Search Patient</label>
+      <div style="display:flex;gap:0.4rem;">
+        <input id="pt-search" type="text" class="form-input" placeholder="Name or mobile…" style="flex:1;" />
+        <button class="btn btn-outline" id="pt-search-btn">Search</button>
+      </div>
+      <div id="pt-results" style="margin-top:0.4rem;"></div>
+    </div>
+    <div id="pt-form">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;">
+        <div><label class="form-label">Patient Name *</label><input id="adm-name" class="form-input" /></div>
+        <div><label class="form-label">Age</label><input id="adm-age" type="number" class="form-input" /></div>
+        <div><label class="form-label">Gender</label>
+          <select id="adm-gender" class="form-input"><option value="">—</option><option>Male</option><option>Female</option><option>Other</option></select></div>
+        <div><label class="form-label">Mobile</label><input id="adm-mobile" class="form-input" /></div>
+      </div>
+    </div>
+    <input type="hidden" id="adm-patient-id" />
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;margin-top:0.6rem;">
+      <div><label class="form-label">Available Bed *</label>
+        <select id="adm-bed" class="form-input"><option value="">Loading beds…</option></select></div>
+      <div><label class="form-label">Primary Doctor *</label>
+        <select id="adm-doctor" class="form-input"><option value="">Loading…</option></select></div>
+      <div style="grid-column:1/-1;"><label class="form-label">Admission Date/Time *</label>
+        <input id="adm-datetime" type="datetime-local" class="form-input" /></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="admit-cancel">Cancel</button>
+      <button class="btn btn-primary" id="admit-save">Admit Patient</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ENCOUNTER DETAILS MODAL ═══ -->
+<div class="modal-bg" id="modal-enc" style="display:none;">
+  <div class="modal-box wide">
+    <p class="modal-title" id="enc-modal-title">Encounter Details</p>
+    <div class="sub-tabs">
+      <button class="sub-tab active" data-et="visits">Visits</button>
+      <button class="sub-tab" data-et="meds">Medications</button>
+      <button class="sub-tab" data-et="vitals">Vitals</button>
+      <button class="sub-tab" data-et="charges">Charges</button>
+      <button class="sub-tab" data-et="bill">Bill</button>
+    </div>
+    <div id="et-visits">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:0.6rem;">
+        <button class="btn btn-primary btn-sm" id="add-visit-btn">+ Add Visit</button></div>
+      <div id="visits-list"><p class="muted">Loading…</p></div>
+    </div>
+    <div id="et-meds" style="display:none;">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:0.6rem;">
+        <button class="btn btn-primary btn-sm" id="new-med-req-btn">+ New Request</button></div>
+      <div id="meds-list"><p class="muted">Loading…</p></div>
+    </div>
+    <div id="et-vitals" style="display:none;">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:0.6rem;">
+        <button class="btn btn-primary btn-sm" id="add-vital-btn">+ Record Vitals</button></div>
+      <div id="vitals-list"><p class="muted">Loading…</p></div>
+    </div>
+    <div id="et-charges" style="display:none;">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:0.6rem;">
+        <button class="btn btn-primary btn-sm" id="add-charge-btn">+ Add Charge</button></div>
+      <div id="charges-list"><p class="muted">Loading…</p></div>
+    </div>
+    <div id="et-bill" style="display:none;">
+      <div id="bill-content"></div>
+      <div style="margin-top:0.8rem;display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;">
+        <div><label class="form-label">Amount Paid ₹</label><input id="bill-paid" type="number" class="form-input" min="0" /></div>
+        <div><label class="form-label">Payment Mode</label>
+          <select id="bill-mode" class="form-input"><option>Cash</option><option>UPI</option><option>Card</option><option>Insurance</option></select></div>
+      </div>
+      <div class="modal-footer" style="border-top:none;padding-top:0;margin-top:0.5rem;">
+        <button class="btn btn-primary" id="record-payment-btn">Record Payment</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="enc-close-btn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ADD VISIT MODAL ═══ -->
+<div class="modal-bg" id="modal-visit" style="display:none;">
+  <div class="modal-box">
+    <p class="modal-title">Add Doctor Visit</p>
+    <div style="display:grid;gap:0.6rem;">
+      <div><label class="form-label">Doctor *</label>
+        <select id="visit-doctor" class="form-input"></select></div>
+      <div><label class="form-label">Observations</label>
+        <textarea id="visit-obs" class="form-input" rows="3"></textarea></div>
+      <div><label class="form-label">Prescription / Treatment</label>
+        <textarea id="visit-rx" class="form-input" rows="3"></textarea></div>
+      <div><label class="form-label">Visit Charge ₹</label>
+        <input id="visit-charge" type="number" class="form-input" min="0" /></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="visit-cancel">Cancel</button>
+      <button class="btn btn-primary" id="visit-save">Save Visit</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ VITALS MODAL ═══ -->
+<div class="modal-bg" id="modal-vitals" style="display:none;">
+  <div class="modal-box">
+    <p class="modal-title">Record Vitals</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;">
+      <div><label class="form-label">Weight (kg)</label><input id="v-weight" type="number" class="form-input" /></div>
+      <div><label class="form-label">Temp (°F)</label><input id="v-temp" type="number" class="form-input" /></div>
+      <div><label class="form-label">BP Systolic</label><input id="v-bps" type="number" class="form-input" /></div>
+      <div><label class="form-label">BP Diastolic</label><input id="v-bpd" type="number" class="form-input" /></div>
+      <div><label class="form-label">SpO2 %</label><input id="v-spo2" type="number" class="form-input" /></div>
+      <div><label class="form-label">RR (breaths/min)</label><input id="v-rr" type="number" class="form-input" /></div>
+      <div style="grid-column:1/-1;"><label class="form-label">Notes</label>
+        <textarea id="v-notes" class="form-input" rows="2"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="vitals-cancel">Cancel</button>
+      <button class="btn btn-primary" id="vitals-save">Save Vitals</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ADD CHARGE MODAL ═══ -->
+<div class="modal-bg" id="modal-charge" style="display:none;">
+  <div class="modal-box">
+    <p class="modal-title">Add Charge</p>
+    <div style="display:grid;gap:0.6rem;">
+      <div><label class="form-label">Description *</label><input id="ch-desc" class="form-input" /></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;">
+        <div><label class="form-label">Amount ₹ *</label><input id="ch-amt" type="number" class="form-input" min="0" /></div>
+        <div><label class="form-label">GST %</label>
+          <select id="ch-gst" class="form-input"><option value="0">0%</option><option value="5">5%</option><option value="12">12%</option><option value="18">18%</option></select></div>
+      </div>
+      <div><label class="form-label">Date</label><input id="ch-date" type="date" class="form-input" /></div>
+      <p id="ch-preview" class="muted" style="font-size:0.85rem;"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="charge-cancel">Cancel</button>
+      <button class="btn btn-primary" id="charge-save">Save Charge</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MED REQUEST MODAL ═══ -->
+<div class="modal-bg" id="modal-med-req" style="display:none;">
+  <div class="modal-box wide">
+    <p class="modal-title">New Medication Request</p>
+    <div id="med-req-rows"></div>
+    <button class="btn btn-outline btn-sm" id="med-req-add-row" style="margin-bottom:0.8rem;">+ Add Item</button>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="med-req-cancel">Cancel</button>
+      <button class="btn btn-primary" id="med-req-save">Submit Request</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MED RETURN MODAL ═══ -->
+<div class="modal-bg" id="modal-med-return" style="display:none;">
+  <div class="modal-box wide">
+    <p class="modal-title">Record Return</p>
+    <div id="med-return-rows"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="med-return-cancel">Cancel</button>
+      <button class="btn btn-primary" id="med-return-save">Save Return</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ DISCHARGE MODAL ═══ -->
+<div class="modal-bg" id="modal-discharge" style="display:none;">
+  <div class="modal-box">
+    <p class="modal-title">Discharge Patient</p>
+    <div style="display:grid;gap:0.6rem;">
+      <div><label class="form-label">Discharge Date/Time *</label>
+        <input id="dc-datetime" type="datetime-local" class="form-input" /></div>
+      <div><label class="form-label">Final Diagnosis</label>
+        <input id="dc-diagnosis" class="form-input" /></div>
+      <div><label class="form-label">Condition on Discharge</label>
+        <select id="dc-condition" class="form-input"><option>Improved</option><option>Stable</option><option>Referred</option><option>LAMA</option><option>Deceased</option></select></div>
+      <div><label class="form-label">Discharge Notes / Summary</label>
+        <textarea id="dc-notes" class="form-input" rows="4"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="dc-cancel">Cancel</button>
+      <button class="btn btn-primary" id="dc-save">Confirm Discharge</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CLOSE ENCOUNTER MODAL ═══ -->
+<div class="modal-bg" id="modal-close-enc" style="display:none;">
+  <div class="modal-box">
+    <p class="modal-title">Close Encounter</p>
+    <div id="close-enc-bill" style="margin-bottom:0.8rem;"></div>
+    <p style="font-size:0.88rem;color:var(--ink-soft);">This will mark the encounter as closed and free the bed. Ensure all payments are settled.</p>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="close-enc-cancel">Cancel</button>
+      <button class="btn btn-danger" id="close-enc-confirm">Close Encounter</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import {
+  auth, authReady, db, onAuthStateChanged, signOut,
+  collection, addDoc, doc, updateDoc, getDoc, getDocs, onSnapshot,
+  query, where, orderBy, limit, runTransaction, serverTimestamp
+} from "./js/firebase-config.js";
+import { applyClinicBranding, todayKey } from "./js/queue-logic.js";
+import { attachThemeToggle } from "./js/theme.js";
+
+const esc = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const fmt = n => Number(n||0).toFixed(2);
+const fmtDT = ts => { if(!ts) return "—"; const d=ts.toDate?ts.toDate():new Date(ts); return d.toLocaleDateString()+' '+d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); };
+const fmtD = ts => { if(!ts) return "—"; const d=ts.toDate?ts.toDate():new Date(ts); return d.toLocaleDateString(); };
+const daysBetween = (a,b) => { const ms=Math.max(0,(b||new Date()).getTime()-(a.toDate?a.toDate():new Date(a)).getTime()); return Math.max(1, Math.ceil(ms/86400000)); };
+
+let currentUser=null, userRole="doctor", clinicId=null;
+let inventoryItems=[], doctorsList=[], clinicSettings={};
+let currentEncId=null, currentEnc=null;
+let unsubEncounters=null;
+
+attachThemeToggle();
+
+authReady.then(()=>{
+  onAuthStateChanged(auth, async user=>{
+    if(!user){ location.href="index.html"; return; }
+    currentUser=user;
+    document.getElementById("user-email").textContent=user.email;
+    document.getElementById("logout-btn").onclick=()=>signOut(auth).then(()=>location.href="index.html");
+    await applyClinicBranding(user);
+    // Determine role
+    const uSnap=await getDocs(query(collection(db,"users"),where("email","==",user.email)));
+    if(!uSnap.empty){ const ud=uSnap.docs[0].data(); userRole=ud.role||"doctor"; clinicId=ud.clinicId||null; }
+    buildNav();
+    loadSettings();
+    loadInventory();
+    loadDoctors();
+    subscribeEncounters();
+    loadBeds();
+  });
+});
+
+function buildNav(){
+  const nav=document.getElementById("nav-links");
+  const adminLinks=`<a href="admin.html">Admin Setup</a><a href="backup.html">Backup</a><a href="reception.html">Reception</a><a href="patients.html">Patients</a><a href="billing.html">Billing</a><a href="inventory.html">Inventory</a><a href="inpatient.html" class="active">Inpatient</a><a href="board.html">Queue Board</a>`;
+  const receptionLinks=`<a href="reception.html">Reception</a><a href="patients.html">Patients</a><a href="billing.html">Billing</a><a href="inventory.html">Inventory</a><a href="inpatient.html" class="active">Inpatient</a><a href="board.html">Queue Board</a><a href="admin.html">Admin Setup</a>`;
+  const doctorLinks=`<a href="reception.html">My Queue</a><a href="patients.html">Patients</a><a href="billing.html">Billing</a><a href="inventory.html">Inventory</a><a href="inpatient.html" class="active">Inpatient</a><a href="board.html">Queue Board</a>`;
+  if(userRole==="admin") nav.innerHTML=adminLinks;
+  else if(userRole==="reception") nav.innerHTML=receptionLinks;
+  else nav.innerHTML=doctorLinks;
+}
+
+async function loadSettings(){
+  try{
+    const sSnap=await getDocs(collection(db,"clinicSettings"));
+    if(!sSnap.empty) clinicSettings=sSnap.docs[0].data();
+  }catch(e){}
+}
+
+async function loadInventory(){
+  try{
+    const snap=await getDocs(query(collection(db,"inventory"),orderBy("name")));
+    inventoryItems=snap.docs.map(d=>({id:d.id,...d.data()}));
+  }catch(e){}
+}
+
+async function loadDoctors(){
+  try{
+    const snap=await getDocs(collection(db,"doctors"));
+    doctorsList=snap.docs.map(d=>({id:d.id,...d.data()}));
+    const sel=document.getElementById("adm-doctor");
+    sel.innerHTML='<option value="">Select doctor</option>'+doctorsList.map(d=>`<option value="${esc(d.id)}">${esc(d.name||d.email||d.id)}</option>`).join("");
+  }catch(e){}
+}
+
+// ── TABS ──
+const tabs={active:"pane-active",discharged:"pane-discharged",closed:"pane-closed",beds:"pane-beds"};
+["active","discharged","closed","beds"].forEach(t=>{
+  document.getElementById("tab-"+t).onclick=()=>{
+    document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("tab-active"));
+    document.getElementById("tab-"+t).classList.add("tab-active");
+    Object.values(tabs).forEach(p=>document.getElementById(p).style.display="none");
+    document.getElementById(tabs[t]).style.display="";
+    if(t==="beds") loadBeds();
+  };
+});
+
+// ── ENCOUNTER SUBSCRIPTION ──
+function subscribeEncounters(){
+  if(unsubEncounters) unsubEncounters();
+  const q=query(collection(db,"inpatientEncounters"),orderBy("admittedAt","desc"),limit(200));
+  unsubEncounters=onSnapshot(q,snap=>{
+    const all=snap.docs.map(d=>({id:d.id,...d.data()}));
+    renderEncList(all.filter(e=>e.status==="active"),"active-list","active");
+    renderEncList(all.filter(e=>e.status==="discharged"),"discharged-list","discharged");
+    renderEncList(all.filter(e=>e.status==="closed"),"closed-list","closed");
+  });
+}
+
+function renderEncList(list, containerId, status){
+  const el=document.getElementById(containerId);
+  if(!list.length){ el.innerHTML='<p class="muted">No encounters found.</p>'; return; }
+  el.innerHTML=list.map(e=>{
+    const days=daysBetween(e.admittedAt, e.dischargedAt||new Date());
+    const actBtns = status==="active"
+      ? `<button class="btn btn-sm btn-outline" onclick="openEncDetails('${e.id}')">📋 Details</button>
+         <button class="btn btn-sm btn-amber" onclick="openDischarge('${e.id}')">🏥 Discharge</button>
+         <button class="btn btn-sm btn-outline" onclick="openEncDetails('${e.id}','bill')">💳 Bill</button>`
+      : status==="discharged"
+      ? `<button class="btn btn-sm btn-outline" onclick="openEncDetails('${e.id}','bill')">💳 Bill</button>
+         <button class="btn btn-sm btn-primary" onclick="openCloseEnc('${e.id}')">✅ Close</button>`
+      : `<button class="btn btn-sm btn-outline" onclick="printSummary('${e.id}')">🖨 Print Summary</button>`;
+    return `<div class="enc-card ${status}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.3rem;">
+        <div><strong>${esc(e.patientName)}</strong> <span class="muted">${esc(e.patientAge||"")}${e.patientAge?" yrs,":""} ${esc(e.patientGender||"")}</span></div>
+        <span class="badge badge-${status==="active"?"teal":status==="discharged"?"amber":"sage"}">${status}</span>
+      </div>
+      <div class="enc-meta">Bed: <strong>${esc(e.bedName)}</strong> (${esc(e.bedWard)}) &nbsp;|&nbsp; Dr. ${esc(e.primaryDoctorName)} &nbsp;|&nbsp; Admitted: ${fmtD(e.admittedAt)} &nbsp;|&nbsp; Days: ${days}</div>
+      <div class="enc-actions">${actBtns}</div>
+    </div>`;
+  }).join("");
+}
+
+// ── BED OVERVIEW ──
+let allBeds=[];
+async function loadBeds(){
+  try{
+    const snap=await getDocs(query(collection(db,"beds"),orderBy("ward")));
+    allBeds=snap.docs.map(d=>({id:d.id,...d.data()}));
+    renderBeds();
+  }catch(e){}
+}
+
+function renderBeds(){
+  const el=document.getElementById("bed-grid-cont");
+  if(!allBeds.length){el.innerHTML='<p class="muted">No beds configured.</p>';return;}
+  el.innerHTML=`<div class="bed-grid">${allBeds.map(b=>{
+    const occ=b.status==="occupied";
+    return `<div class="bed-card ${occ?"bed-occupied":"bed-available"}">
+      <div style="font-weight:700;font-size:0.95rem;">${esc(b.name)}</div>
+      <div class="muted" style="font-size:0.78rem;">${esc(b.ward)} — ${esc(b.categoryName||"")}</div>
+      <div style="font-size:0.82rem;margin-top:0.3rem;">${occ?`<span style="color:var(--amber-700);">Occupied</span>`:`<span style="color:var(--sage-700);">Available</span>`}</div>
+      <div style="font-size:0.78rem;color:var(--ink-soft);">₹${fmt(b.dailyRent)}/day</div>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+// ── ADMISSION MODAL ──
+document.getElementById("admit-btn").onclick=openAdmit;
+document.getElementById("admit-cancel").onclick=()=>document.getElementById("modal-admit").style.display="none";
+
+async function openAdmit(){
+  document.getElementById("adm-name").value="";
+  document.getElementById("adm-age").value="";
+  document.getElementById("adm-gender").value="";
+  document.getElementById("adm-mobile").value="";
+  document.getElementById("adm-patient-id").value="";
+  document.getElementById("pt-search").value="";
+  document.getElementById("pt-results").innerHTML="";
+  // Set default datetime
+  const now=new Date(); now.setSeconds(0,0);
+  document.getElementById("adm-datetime").value=now.toISOString().slice(0,16);
+  // Load available beds
+  await loadBeds();
+  const avail=allBeds.filter(b=>b.status==="available");
+  const bedSel=document.getElementById("adm-bed");
+  bedSel.innerHTML='<option value="">Select bed</option>'+avail.map(b=>`<option value="${esc(b.id)}" data-rent="${b.dailyRent||0}" data-ward="${esc(b.ward)}" data-cat="${esc(b.categoryName||"")}">${esc(b.name)} — ${esc(b.ward)} (₹${fmt(b.dailyRent)}/day)</option>`).join("");
+  document.getElementById("modal-admit").style.display="flex";
+}
+
+document.getElementById("pt-search-btn").onclick=async()=>{
+  const q2=document.getElementById("pt-search").value.trim();
+  if(!q2) return;
+  const res=document.getElementById("pt-results");
+  res.innerHTML='<span class="muted">Searching…</span>';
+  try{
+    const snap=await getDocs(query(collection(db,"patients"),where("nameLower",">=",q2.toLowerCase()),where("nameLower","<=",q2.toLowerCase()+""),limit(10)));
+    const snm=snap.docs.map(d=>({id:d.id,...d.data()}));
+    if(!snm.length){res.innerHTML='<span class="muted">No patients found. Fill details below to add.</span>';return;}
+    res.innerHTML=snm.map(p=>`<div style="padding:0.3rem 0.5rem;cursor:pointer;border-radius:4px;font-size:0.88rem;" class="hover-bg" onclick="selectPatient('${p.id}','${esc(p.name||"")}','${p.age||""}','${esc(p.gender||"")}','${esc(p.mobile||"")}')">
+      ${esc(p.name)} &nbsp;<span class="muted">${esc(p.mobile||"")}</span></div>`).join("");
+  }catch(e){res.innerHTML='<span class="muted">Error searching.</span>';}
+};
+
+window.selectPatient=(id,name,age,gender,mobile)=>{
+  document.getElementById("adm-patient-id").value=id;
+  document.getElementById("adm-name").value=name;
+  document.getElementById("adm-age").value=age;
+  document.getElementById("adm-gender").value=gender;
+  document.getElementById("adm-mobile").value=mobile;
+  document.getElementById("pt-results").innerHTML=`<span style="font-size:0.82rem;color:var(--teal-700);">✓ ${esc(name)} selected</span>`;
+};
+
+document.getElementById("admit-save").onclick=async()=>{
+  const name=document.getElementById("adm-name").value.trim();
+  const bedId=document.getElementById("adm-bed").value;
+  const doctorId=document.getElementById("adm-doctor").value;
+  const dtVal=document.getElementById("adm-datetime").value;
+  if(!name||!bedId||!doctorId||!dtVal){alert("Fill all required fields.");return;}
+  const bedEl=document.getElementById("adm-bed");
+  const bedOpt=bedEl.options[bedEl.selectedIndex];
+  const bedName=bedOpt.text.split(" — ")[0];
+  const bedWard=bedOpt.dataset.ward||"";
+  const bedCat=bedOpt.dataset.cat||"";
+  const dailyRent=Number(bedOpt.dataset.rent||0);
+  const doctorSel=document.getElementById("adm-doctor");
+  const doctorName=doctorSel.options[doctorSel.selectedIndex].text;
+  const admittedAt=new Date(dtVal);
+  const btn=document.getElementById("admit-save");
+  btn.disabled=true; btn.textContent="Saving…";
+  try{
+    await runTransaction(db,async tx=>{
+      const bedRef=doc(db,"beds",bedId);
+      const bedSnap=await tx.get(bedRef);
+      if(!bedSnap.exists()||bedSnap.data().status!=="available") throw new Error("Bed no longer available");
+      const encRef=doc(collection(db,"inpatientEncounters"));
+      tx.set(encRef,{
+        patientId:document.getElementById("adm-patient-id").value||null,
+        patientName:name,
+        patientAge:Number(document.getElementById("adm-age").value)||null,
+        patientGender:document.getElementById("adm-gender").value||null,
+        patientMobile:document.getElementById("adm-mobile").value.trim()||null,
+        bedId, bedName, bedWard, bedCategory:bedCat, dailyRent,
+        primaryDoctorId:doctorId, primaryDoctorName:doctorName,
+        admittedAt, admittedBy:currentUser.email,
+        dischargedAt:null, status:"active",
+        dischargeNotes:"", dischargeDate:"",
+        bedDays:0, bedChargesTotal:0, medChargesTotal:0, visitChargesTotal:0,
+        otherChargesTotal:0, gstTotal:0, grandTotal:0, amountPaid:0,
+        billStatus:"pending", createdAt:serverTimestamp(), updatedAt:serverTimestamp()
+      });
+      tx.update(bedRef,{status:"occupied",currentEncounterId:encRef.id});
+    });
+    document.getElementById("modal-admit").style.display="none";
+  }catch(e){alert("Error: "+e.message);}
+  btn.disabled=false; btn.textContent="Admit Patient";
+};
+
+// ── ENCOUNTER DETAILS ──
+window.openEncDetails=async(encId, tab="visits")=>{
+  currentEncId=encId;
+  const snap=await getDoc(doc(db,"inpatientEncounters",encId));
+  if(!snap.exists()) return;
+  currentEnc={id:snap.id,...snap.data()};
+  document.getElementById("enc-modal-title").textContent=`Encounter: ${currentEnc.patientName} — ${currentEnc.bedName}`;
+  switchEncTab(tab);
+  document.getElementById("modal-enc").style.display="flex";
+};
+
+document.querySelectorAll(".sub-tab").forEach(btn=>{
+  btn.onclick=()=>switchEncTab(btn.dataset.et);
+});
+
+function switchEncTab(tab){
+  document.querySelectorAll(".sub-tab").forEach(b=>b.classList.toggle("active",b.dataset.et===tab));
+  ["visits","meds","vitals","charges","bill"].forEach(t=>{
+    document.getElementById("et-"+t).style.display=t===tab?"":"none";
+  });
+  if(tab==="visits") loadVisits();
+  if(tab==="meds") loadMedReqs();
+  if(tab==="vitals") loadVitals();
+  if(tab==="charges") loadCharges();
+  if(tab==="bill") loadBill();
+}
+
+document.getElementById("enc-close-btn").onclick=()=>document.getElementById("modal-enc").style.display="none";
+
+// ── VISITS ──
+async function loadVisits(){
+  const el=document.getElementById("visits-list");
+  try{
+    const snap=await getDocs(query(collection(db,"encounterVisits"),where("encounterId","==",currentEncId),orderBy("visitedAt","desc")));
+    if(snap.empty){el.innerHTML='<p class="muted">No visits recorded.</p>';return;}
+    el.innerHTML=snap.docs.map(d=>{const v=d.data();return `<div class="visit-card">
+      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:0.3rem;">
+        <strong>Dr. ${esc(v.doctorName)}</strong><span class="muted">${fmtDT(v.visitedAt)}</span></div>
+      ${v.observations?`<div style="margin-top:0.3rem;"><span class="muted">Observations:</span> ${esc(v.observations)}</div>`:""}
+      ${v.prescription?`<div><span class="muted">Rx:</span> ${esc(v.prescription)}</div>`:""}
+      ${v.visitCharge?`<div style="font-size:0.82rem;color:var(--teal-700);">Charge: ₹${fmt(v.visitCharge)}</div>`:""}
+    </div>`;}).join("");
+  }catch(e){el.innerHTML='<p class="muted">Error loading visits.</p>';}
+}
+
+document.getElementById("add-visit-btn").onclick=()=>{
+  const sel=document.getElementById("visit-doctor");
+  sel.innerHTML=doctorsList.map(d=>`<option value="${esc(d.id)}">${esc(d.name||d.email||d.id)}</option>`).join("");
+  const defCharge=clinicSettings.inpatientVisitCharge||500;
+  document.getElementById("visit-charge").value=defCharge;
+  document.getElementById("visit-obs").value="";
+  document.getElementById("visit-rx").value="";
+  document.getElementById("modal-visit").style.display="flex";
+};
+
+document.getElementById("visit-cancel").onclick=()=>document.getElementById("modal-visit").style.display="none";
+document.getElementById("visit-save").onclick=async()=>{
+  const doctorId=document.getElementById("visit-doctor").value;
+  const doctorSel=document.getElementById("visit-doctor");
+  const doctorName=doctorSel.options[doctorSel.selectedIndex].text;
+  const obs=document.getElementById("visit-obs").value.trim();
+  const rx=document.getElementById("visit-rx").value.trim();
+  const charge=Number(document.getElementById("visit-charge").value)||0;
+  const btn=document.getElementById("visit-save");
+  btn.disabled=true;
+  try{
+    await addDoc(collection(db,"encounterVisits"),{
+      encounterId:currentEncId, doctorId, doctorName, observations:obs,
+      prescription:rx, visitCharge:charge, visitedAt:serverTimestamp(), createdAt:serverTimestamp()
+    });
+    document.getElementById("modal-visit").style.display="none";
+    loadVisits();
+  }catch(e){alert("Error: "+e.message);}
+  btn.disabled=false;
+};
+
+// ── VITALS ──
+async function loadVitals(){
+  const el=document.getElementById("vitals-list");
+  try{
+    const snap=await getDocs(query(collection(db,"encounterVitals"),where("encounterId","==",currentEncId),orderBy("recordedAt","desc")));
+    if(snap.empty){el.innerHTML='<p class="muted">No vitals recorded.</p>';return;}
+    el.innerHTML=snap.docs.map(d=>{const v=d.data();return `<div class="vital-card">
+      <div style="display:flex;justify-content:space-between;"><span class="muted">${fmtDT(v.recordedAt)}</span><span class="muted">${esc(v.recordedBy||"")}</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:0.5rem 1.2rem;margin-top:0.3rem;font-size:0.88rem;">
+        ${v.weight?`<span>Weight: <strong>${v.weight} kg</strong></span>`:""}
+        ${v.bp?`<span>BP: <strong>${v.bp}</strong></span>`:""}
+        ${v.temp?`<span>Temp: <strong>${v.temp}°F</strong></span>`:""}
+        ${v.spo2?`<span>SpO2: <strong>${v.spo2}%</strong></span>`:""}
+        ${v.rr?`<span>RR: <strong>${v.rr}/min</strong></span>`:""}
+      </div>
+      ${v.notes?`<div class="muted" style="font-size:0.82rem;margin-top:0.2rem;">${esc(v.notes)}</div>`:""}
+    </div>`;}).join("");
+  }catch(e){el.innerHTML='<p class="muted">Error.</p>';}
+}
+
+document.getElementById("add-vital-btn").onclick=()=>{
+  ["v-weight","v-temp","v-bps","v-bpd","v-spo2","v-rr","v-notes"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("modal-vitals").style.display="flex";
+};
+document.getElementById("vitals-cancel").onclick=()=>document.getElementById("modal-vitals").style.display="none";
+document.getElementById("vitals-save").onclick=async()=>{
+  const bps=document.getElementById("v-bps").value; const bpd=document.getElementById("v-bpd").value;
+  const btn=document.getElementById("vitals-save"); btn.disabled=true;
+  try{
+    await addDoc(collection(db,"encounterVitals"),{
+      encounterId:currentEncId,
+      recordedAt:serverTimestamp(), recordedBy:currentUser.email,
+      weight:Number(document.getElementById("v-weight").value)||null,
+      bp:bps&&bpd?`${bps}/${bpd}`:null,
+      temp:Number(document.getElementById("v-temp").value)||null,
+      spo2:Number(document.getElementById("v-spo2").value)||null,
+      rr:Number(document.getElementById("v-rr").value)||null,
+      notes:document.getElementById("v-notes").value.trim()||null
+    });
+    document.getElementById("modal-vitals").style.display="none";
+    loadVitals();
+  }catch(e){alert("Error: "+e.message);}
+  btn.disabled=false;
+};
+
+// ── CHARGES ──
+async function loadCharges(){
+  const el=document.getElementById("charges-list");
+  try{
+    const snap=await getDocs(query(collection(db,"encounterCharges"),where("encounterId","==",currentEncId),orderBy("createdAt","desc")));
+    if(snap.empty){el.innerHTML='<p class="muted">No additional charges.</p>';return;}
+    el.innerHTML=snap.docs.map(d=>{const c=d.data();return `<div class="charge-card">
+      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:0.3rem;">
+        <strong>${esc(c.description)}</strong><span>₹${fmt(c.total)}</span></div>
+      <div class="muted" style="font-size:0.82rem;">${fmtD(c.chargeDate||c.createdAt)} &nbsp;| Amt: ₹${fmt(c.amount)} GST ${c.gstPct||0}% (₹${fmt(c.gstAmount)})</div>
+    </div>`;}).join("");
+  }catch(e){el.innerHTML='<p class="muted">Error.</p>';}
+}
+
+document.getElementById("add-charge-btn").onclick=()=>{
+  document.getElementById("ch-desc").value=""; document.getElementById("ch-amt").value="";
+  document.getElementById("ch-gst").value="0"; document.getElementById("ch-preview").textContent="";
+  document.getElementById("ch-date").value=new Date().toISOString().split("T")[0];
+  document.getElementById("modal-charge").style.display="flex";
+};
+["ch-amt","ch-gst"].forEach(id=>document.getElementById(id).oninput=updateChPreview);
+function updateChPreview(){
+  const amt=Number(document.getElementById("ch-amt").value)||0;
+  const gst=Number(document.getElementById("ch-gst").value)||0;
+  const gstAmt=amt*gst/100;
+  document.getElementById("ch-preview").textContent=gst?`GST ₹${fmt(gstAmt)} → Total ₹${fmt(amt+gstAmt)}`:"";
+}
+document.getElementById("charge-cancel").onclick=()=>document.getElementById("modal-charge").style.display="none";
+document.getElementById("charge-save").onclick=async()=>{
+  const desc=document.getElementById("ch-desc").value.trim();
+  const amount=Number(document.getElementById("ch-amt").value)||0;
+  if(!desc||!amount){alert("Fill description and amount.");return;}
+  const gstPct=Number(document.getElementById("ch-gst").value)||0;
+  const gstAmount=amount*gstPct/100;
+  const btn=document.getElementById("charge-save"); btn.disabled=true;
+  try{
+    await addDoc(collection(db,"encounterCharges"),{
+      encounterId:currentEncId, description:desc, amount, gstPct, gstAmount,
+      total:amount+gstAmount, chargeDate:document.getElementById("ch-date").value,
+      addedBy:currentUser.email, createdAt:serverTimestamp()
+    });
+    document.getElementById("modal-charge").style.display="none";
+    loadCharges();
+  }catch(e){alert("Error: "+e.message);}
+  btn.disabled=false;
+};
+
+// ── BILL ──
+async function loadBill(){
+  const el=document.getElementById("bill-content");
+  if(!currentEnc){el.innerHTML=""; return;}
+  el.innerHTML='<p class="muted">Calculating…</p>';
+  try{
+    const [visits, meds, charges]=await Promise.all([
+      getDocs(query(collection(db,"encounterVisits"),where("encounterId","==",currentEncId))),
+      getDocs(query(collection(db,"encounterMedRequests"),where("encounterId","==",currentEncId))),
+      getDocs(query(collection(db,"encounterCharges"),where("encounterId","==",currentEncId)))
+    ]);
+    const now=currentEnc.dischargedAt?currentEnc.dischargedAt:new Date();
+    const bedDays=daysBetween(currentEnc.admittedAt, now);
+    const bedTotal=bedDays*(currentEnc.dailyRent||0);
+    const visitTotal=visits.docs.reduce((s,d)=>s+Number(d.data().visitCharge||0),0);
+    const medTotal=meds.docs.reduce((s,d)=>{
+      const items=d.data().items||[];
+      return s+items.reduce((ss,it)=>ss+Number(it.netQty||0)*Number(it.unitCost||0),0);
+    },0);
+    const otherTotal=charges.docs.reduce((s,d)=>s+Number(d.data().amount||0),0);
+    const gstTotal=charges.docs.reduce((s,d)=>s+Number(d.data().gstAmount||0),0);
+    const grand=bedTotal+visitTotal+medTotal+otherTotal+gstTotal;
+    const paid=currentEnc.amountPaid||0;
+    const billStatus=paid>=grand?"settled":paid>0?"partial":"pending";
+    el.innerHTML=`
+      <div class="bill-row"><span>Bed charges (${bedDays} days × ₹${fmt(currentEnc.dailyRent||0)})</span><span>₹${fmt(bedTotal)}</span></div>
+      <div class="bill-row"><span>Visit charges</span><span>₹${fmt(visitTotal)}</span></div>
+      <div class="bill-row"><span>Medicine charges</span><span>₹${fmt(medTotal)}</span></div>
+      <div class="bill-row"><span>Other charges</span><span>₹${fmt(otherTotal)}</span></div>
+      <div class="bill-row"><span>GST</span><span>₹${fmt(gstTotal)}</span></div>
+      <div class="bill-row total"><span>Grand Total</span><span>₹${fmt(grand)}</span></div>
+      <div class="bill-row"><span>Amount Paid</span><span>₹${fmt(paid)}</span></div>
+      <div class="bill-row"><span>Balance</span><span style="color:${grand-paid>0?"var(--clay-500)":"var(--sage-700)}"}">₹${fmt(grand-paid)}</span></div>
+      <div style="margin-top:0.4rem;"><span class="badge badge-${billStatus==="settled"?"sage":billStatus==="partial"?"teal":"amber"}">${billStatus}</span></div>`;
+    document.getElementById("bill-paid").value=fmt(paid);
+  }catch(e){el.innerHTML='<p class="muted">Error loading bill.</p>';}
+}
+
+document.getElementById("record-payment-btn").onclick=async()=>{
+  const paid=Number(document.getElementById("bill-paid").value)||0;
+  const mode=document.getElementById("bill-mode").value;
+  try{
+    await updateDoc(doc(db,"inpatientEncounters",currentEncId),{
+      amountPaid:paid, paymentMode:mode, updatedAt:serverTimestamp()
+    });
+    loadBill();
+    // refresh encounter
+    const snap=await getDoc(doc(db,"inpatientEncounters",currentEncId));
+    if(snap.exists()) currentEnc={id:snap.id,...snap.data()};
+  }catch(e){alert("Error: "+e.message);}
+};
+
+// ── MED REQUESTS ──
+async function loadMedReqs(){
+  const el=document.getElementById("meds-list");
+  try{
+    const snap=await getDocs(query(collection(db,"encounterMedRequests"),where("encounterId","==",currentEncId),orderBy("requestedAt","desc")));
+    if(snap.empty){el.innerHTML='<p class="muted">No medication requests.</p>';return;}
+    el.innerHTML=snap.docs.map(d=>{const r=d.data();return `<div class="med-req-card ${r.status}">
+      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:0.3rem;">
+        <strong>Request #${r.requestNumber||""}</strong>
+        <span class="badge badge-${r.status==="open"?"amber":r.status==="partial_return"?"teal":"sage"}">${r.status}</span></div>
+      <div class="muted" style="font-size:0.82rem;">${fmtD(r.requestedAt)} by ${esc(r.staffName||r.requestedBy||"")}</div>
+      <table class="items-sub" style="margin-top:0.4rem;">
+        <thead><tr><th>Item</th><th>Requested</th><th>Returned</th><th>Net</th><th>Cost</th></tr></thead>
+        <tbody>${(r.items||[]).map(it=>`<tr>
+          <td>${esc(it.itemName)}</td><td>${it.requestedQty} ${esc(it.unit||"")}</td>
+          <td>${it.returnedQty||0}</td><td>${it.netQty||it.requestedQty}</td>
+          <td>₹${fmt((it.netQty||it.requestedQty)*it.unitCost)}</td></tr>`).join("")}</tbody>
+      </table>
+      ${r.status!=="closed"?`<div style="margin-top:0.4rem;"><button class="btn btn-sm btn-outline" onclick="openMedReturn('${d.id}')">↩ Add Return</button></div>`:""}
+    </div>`;}).join("");
+  }catch(e){el.innerHTML='<p class="muted">Error.</p>';}
+}
+
+document.getElementById("new-med-req-btn").onclick=()=>{
+  document.getElementById("med-req-rows").innerHTML="";
+  addMedReqRow();
+  document.getElementById("modal-med-req").style.display="flex";
+};
+
+function addMedReqRow(){
+  const cont=document.getElementById("med-req-rows");
+  const idx=cont.children.length;
+  const itemOpts=inventoryItems.map(i=>`<option value="${esc(i.id)}" data-unit="${esc(i.unit||"")}" data-cost="${i.costPrice||0}">${esc(i.name)}</option>`).join("");
+  const row=document.createElement("div");
+  row.className="line-item-row"; row.dataset.idx=idx;
+  row.innerHTML=`<select class="form-input med-item-sel" style="font-size:0.85rem;"><option value="">Select item</option>${itemOpts}</select>
+    <input type="number" class="form-input med-qty" placeholder="Qty" min="1" style="font-size:0.85rem;" />
+    <button class="btn btn-sm btn-danger" onclick="this.parentElement.remove()" style="padding:0.2rem 0.45rem;">✕</button>`;
+  cont.appendChild(row);
+}
+
+document.getElementById("med-req-add-row").onclick=addMedReqRow;
+document.getElementById("med-req-cancel").onclick=()=>document.getElementById("modal-med-req").style.display="none";
+document.getElementById("med-req-save").onclick=async()=>{
+  const rows=[...document.getElementById("med-req-rows").querySelectorAll(".line-item-row")];
+  const items=rows.map(r=>{
+    const sel=r.querySelector(".med-item-sel"); const qty=Number(r.querySelector(".med-qty").value)||0;
+    if(!sel.value||!qty) return null;
+    const opt=sel.options[sel.selectedIndex];
+    const itemName=opt.text; const unit=opt.dataset.unit; const unitCost=Number(opt.dataset.cost)||0;
+    return {itemId:sel.value,itemName,unit,requestedQty:qty,returnedQty:0,netQty:qty,unitCost,sellingPrice:unitCost,totalCost:qty*unitCost};
+  }).filter(Boolean);
+  if(!items.length){alert("Add at least one item.");return;}
+  const btn=document.getElementById("med-req-save"); btn.disabled=true;
+  try{
+    // Get request count
+    const cntSnap=await getDocs(query(collection(db,"encounterMedRequests"),where("encounterId","==",currentEncId)));
+    const reqNum=cntSnap.size+1;
+    await addDoc(collection(db,"encounterMedRequests"),{
+      encounterId:currentEncId, requestNumber:reqNum,
+      requestedBy:currentUser.email, staffName:currentUser.email,
+      items, status:"open", requestedAt:serverTimestamp(),
+      date:new Date().toISOString().split("T")[0], createdAt:serverTimestamp()
+    });
+    document.getElementById("modal-med-req").style.display="none";
+    loadMedReqs();
+  }catch(e){alert("Error: "+e.message);}
+  btn.disabled=false;
+};
+
+window.openMedReturn=async(reqId)=>{
+  const snap=await getDoc(doc(db,"encounterMedRequests",reqId));
+  if(!snap.exists()) return;
+  const req=snap.data();
+  const cont=document.getElementById("med-return-rows");
+  cont.innerHTML=`<p class="muted" style="margin-bottom:0.6rem;font-size:0.85rem;">Enter returned quantities:</p>`+
+    (req.items||[]).map((it,i)=>`<div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.4rem;font-size:0.88rem;">
+      <span style="flex:1;">${esc(it.itemName)} (Issued: ${it.netQty})</span>
+      <input type="number" class="form-input" id="ret-qty-${i}" min="0" max="${it.netQty}" value="${it.returnedQty||0}" style="width:80px;" /></div>`).join("");
+  document.getElementById("modal-med-return").style.display="flex";
+  document.getElementById("med-return-save").onclick=async()=>{
+    const newItems=req.items.map((it,i)=>{
+      const retQty=Number(document.getElementById("ret-qty-"+i).value)||0;
+      return {...it,returnedQty:retQty,netQty:it.requestedQty-retQty,totalCost:(it.requestedQty-retQty)*it.unitCost};
+    });
+    const allRet=newItems.every(it=>it.returnedQty>=it.requestedQty);
+    const anyRet=newItems.some(it=>it.returnedQty>0);
+    const newStatus=allRet?"closed":anyRet?"partial_return":"open";
+    try{
+      await updateDoc(doc(db,"encounterMedRequests",reqId),{items:newItems,status:newStatus,updatedAt:serverTimestamp()});
+      document.getElementById("modal-med-return").style.display="none";
+      loadMedReqs();
+    }catch(e){alert("Error: "+e.message);}
+  };
+};
+document.getElementById("med-return-cancel").onclick=()=>document.getElementById("modal-med-return").style.display="none";
+
+// ── DISCHARGE ──
+window.openDischarge=async(encId)=>{
+  currentEncId=encId;
+  const snap=await getDoc(doc(db,"inpatientEncounters",encId));
+  if(!snap.exists()) return;
+  currentEnc={id:snap.id,...snap.data()};
+  const now=new Date(); now.setSeconds(0,0);
+  document.getElementById("dc-datetime").value=now.toISOString().slice(0,16);
+  document.getElementById("dc-diagnosis").value="";
+  document.getElementById("dc-condition").value="Improved";
+  document.getElementById("dc-notes").value="";
+  document.getElementById("modal-discharge").style.display="flex";
+};
+document.getElementById("dc-cancel").onclick=()=>document.getElementById("modal-discharge").style.display="none";
+document.getElementById("dc-save").onclick=async()=>{
+  const dtVal=document.getElementById("dc-datetime").value;
+  if(!dtVal){alert("Enter discharge date.");return;}
+  const btn=document.getElementById("dc-save"); btn.disabled=true;
+  try{
+    await updateDoc(doc(db,"inpatientEncounters",currentEncId),{
+      status:"discharged", dischargedAt:new Date(dtVal),
+      dischargeNotes:document.getElementById("dc-notes").value.trim(),
+      dischargeDate:dtVal.split("T")[0],
+      finalDiagnosis:document.getElementById("dc-diagnosis").value.trim(),
+      conditionOnDischarge:document.getElementById("dc-condition").value,
+      updatedAt:serverTimestamp()
+    });
+    document.getElementById("modal-discharge").style.display="none";
+  }catch(e){alert("Error: "+e.message);}
+  btn.disabled=false;
+};
+
+// ── CLOSE ENCOUNTER ──
+window.openCloseEnc=async(encId)=>{
+  currentEncId=encId;
+  const snap=await getDoc(doc(db,"inpatientEncounters",encId));
+  if(!snap.exists()) return;
+  currentEnc={id:snap.id,...snap.data()};
+  const now=currentEnc.dischargedAt?currentEnc.dischargedAt:new Date();
+  const bedDays=daysBetween(currentEnc.admittedAt,now);
+  const bedTotal=bedDays*(currentEnc.dailyRent||0);
+  document.getElementById("close-enc-bill").innerHTML=`
+    <div class="bill-row"><span>Patient</span><strong>${esc(currentEnc.patientName)}</strong></div>
+    <div class="bill-row"><span>Bed charges</span><span>₹${fmt(bedTotal)}</span></div>
+    <div class="bill-row"><span>Amount Paid</span><span>₹${fmt(currentEnc.amountPaid||0)}</span></div>
+    <div class="bill-row"><span>Bill Status</span><span class="badge badge-${(currentEnc.billStatus||"pending")==="settled"?"sage":"amber"}">${currentEnc.billStatus||"pending"}</span></div>`;
+  document.getElementById("modal-close-enc").style.display="flex";
+};
+document.getElementById("close-enc-cancel").onclick=()=>document.getElementById("modal-close-enc").style.display="none";
+document.getElementById("close-enc-confirm").onclick=async()=>{
+  const btn=document.getElementById("close-enc-confirm"); btn.disabled=true;
+  try{
+    await runTransaction(db,async tx=>{
+      const encRef=doc(db,"inpatientEncounters",currentEncId);
+      const encSnap=await tx.get(encRef);
+      if(!encSnap.exists()) throw new Error("Encounter not found");
+      const bedId=encSnap.data().bedId;
+      tx.update(encRef,{status:"closed",updatedAt:serverTimestamp()});
+      if(bedId){
+        const bedRef=doc(db,"beds",bedId);
+        tx.update(bedRef,{status:"available",currentEncounterId:null});
+      }
+    });
+    document.getElementById("modal-close-enc").style.display="none";
+  }catch(e){alert("Error: "+e.message);}
+  btn.disabled=false;
+};
+
+// ── PRINT DISCHARGE SUMMARY ──
+window.printSummary=async(encId)=>{
+  const [encSnap,visitsSnap,medsSnap,vitalsSnap,chargesSnap]=await Promise.all([
+    getDoc(doc(db,"inpatientEncounters",encId)),
+    getDocs(query(collection(db,"encounterVisits"),where("encounterId","==",encId),orderBy("visitedAt","asc"))),
+    getDocs(query(collection(db,"encounterMedRequests"),where("encounterId","==",encId),orderBy("requestedAt","asc"))),
+    getDocs(query(collection(db,"encounterVitals"),where("encounterId","==",encId),orderBy("recordedAt","asc"))),
+    getDocs(query(collection(db,"encounterCharges"),where("encounterId","==",encId),orderBy("createdAt","asc")))
+  ]);
+  if(!encSnap.exists()) return;
+  const e=encSnap.data();
+  const clinicName=clinicSettings.clinicName||document.querySelector("[data-clinic-name]")?.textContent||"Hospital";
+  const now=e.dischargedAt||new Date();
+  const bedDays=daysBetween(e.admittedAt,now);
+  const bedTotal=bedDays*(e.dailyRent||0);
+  const visitTotal=visitsSnap.docs.reduce((s,d)=>s+Number(d.data().visitCharge||0),0);
+  const medTotal=medsSnap.docs.reduce((s,d)=>(d.data().items||[]).reduce((ss,it)=>ss+Number(it.netQty||0)*Number(it.unitCost||0),0)+s,0);
+  const otherTotal=chargesSnap.docs.reduce((s,d)=>s+Number(d.data().amount||0),0);
+  const gstTotal=chargesSnap.docs.reduce((s,d)=>s+Number(d.data().gstAmount||0),0);
+  const grand=bedTotal+visitTotal+medTotal+otherTotal+gstTotal;
+
+  const win=window.open("","_blank","width=800,height=900");
+  win.document.write(`<!DOCTYPE html><html><head><title>Discharge Summary</title>
+<style>body{font-family:Arial,sans-serif;font-size:13px;padding:24px;color:#111;}
+h1{font-size:20px;text-align:center;} h2{font-size:14px;border-bottom:1px solid #ccc;padding-bottom:4px;margin-top:18px;}
+table{width:100%;border-collapse:collapse;margin-top:6px;} th,td{border:1px solid #ccc;padding:4px 8px;text-align:left;}
+th{background:#f0f0f0;} .right{text-align:right;} .total-row{font-weight:700;background:#f5f5f5;}
+</style></head><body>
+<h1>${esc(clinicName)}</h1>
+<p style="text-align:center;color:#555;">Discharge Summary</p>
+<h2>Patient Details</h2>
+<table><tr><th>Name</th><td>${esc(e.patientName)}</td><th>Age/Gender</th><td>${esc(e.patientAge||"")} ${esc(e.patientGender||"")}</td></tr>
+<tr><th>Mobile</th><td>${esc(e.patientMobile||"—")}</td><th>Primary Doctor</th><td>Dr. ${esc(e.primaryDoctorName)}</td></tr>
+<tr><th>Bed</th><td>${esc(e.bedName)} — ${esc(e.bedWard)}</td><th>Category</th><td>${esc(e.bedCategory||"")}</td></tr>
+<tr><th>Admitted</th><td>${fmtDT(e.admittedAt)}</td><th>Discharged</th><td>${fmtDT(e.dischargedAt)}</td></tr>
+<tr><th>Final Diagnosis</th><td>${esc(e.finalDiagnosis||"")}</td><th>Condition</th><td>${esc(e.conditionOnDischarge||"")}</td></tr></table>
+<h2>Vitals History</h2>
+<table><thead><tr><th>Date/Time</th><th>Weight</th><th>BP</th><th>Temp</th><th>SpO2</th><th>RR</th><th>Notes</th></tr></thead>
+<tbody>${vitalsSnap.docs.map(d=>{const v=d.data();return `<tr><td>${fmtDT(v.recordedAt)}</td><td>${v.weight||""}</td><td>${v.bp||""}</td><td>${v.temp||""}</td><td>${v.spo2||""}</td><td>${v.rr||""}</td><td>${esc(v.notes||"")}</td></tr>`;}).join("")||'<tr><td colspan="7">—</td></tr>'}</tbody></table>
+<h2>Doctor Visits</h2>
+${visitsSnap.docs.map(d=>{const v=d.data();return `<div style="margin-bottom:8px;border:1px solid #ddd;padding:6px 10px;border-radius:4px;">
+<strong>Dr. ${esc(v.doctorName)}</strong> — ${fmtDT(v.visitedAt)}<br>
+${v.observations?`<b>Observations:</b> ${esc(v.observations)}<br>`:""}
+${v.prescription?`<b>Rx:</b> ${esc(v.prescription)}<br>`:""}
+</div>`;}).join("") || "<p>—</p>"}
+<h2>Medicines</h2>
+<table><thead><tr><th>Item</th><th>Unit</th><th>Issued</th><th>Returned</th><th>Net</th><th>Unit Cost</th><th>Total</th></tr></thead>
+<tbody>${medsSnap.docs.flatMap(d=>(d.data().items||[]).map(it=>`<tr><td>${esc(it.itemName)}</td><td>${esc(it.unit||"")}</td><td class="right">${it.requestedQty}</td><td class="right">${it.returnedQty||0}</td><td class="right">${it.netQty}</td><td class="right">₹${fmt(it.unitCost)}</td><td class="right">₹${fmt(it.netQty*it.unitCost)}</td></tr>`)).join("")||'<tr><td colspan="7">—</td></tr>'}</tbody></table>
+<h2>Other Charges</h2>
+<table><thead><tr><th>Description</th><th>Date</th><th>Amount</th><th>GST</th><th>Total</th></tr></thead>
+<tbody>${chargesSnap.docs.map(d=>{const c=d.data();return `<tr><td>${esc(c.description)}</td><td>${fmtD(c.chargeDate||c.createdAt)}</td><td class="right">₹${fmt(c.amount)}</td><td class="right">₹${fmt(c.gstAmount)}</td><td class="right">₹${fmt(c.total)}</td></tr>`;}).join("")||'<tr><td colspan="5">—</td></tr>'}</tbody></table>
+<h2>Bill Summary</h2>
+<table><tbody>
+<tr><td>Bed charges (${bedDays} days × ₹${fmt(e.dailyRent||0)})</td><td class="right">₹${fmt(bedTotal)}</td></tr>
+<tr><td>Visit charges</td><td class="right">₹${fmt(visitTotal)}</td></tr>
+<tr><td>Medicine charges</td><td class="right">₹${fmt(medTotal)}</td></tr>
+<tr><td>Other charges</td><td class="right">₹${fmt(otherTotal)}</td></tr>
+<tr><td>GST</td><td class="right">₹${fmt(gstTotal)}</td></tr>
+<tr class="total-row"><td>Grand Total</td><td class="right">₹${fmt(grand)}</td></tr>
+<tr><td>Amount Paid</td><td class="right">₹${fmt(e.amountPaid||0)}</td></tr>
+<tr><td>Balance</td><td class="right">₹${fmt(grand-(e.amountPaid||0))}</td></tr>
+</tbody></table>
+${e.dischargeNotes?`<h2>Discharge Notes</h2><p>${esc(e.dischargeNotes)}</p>`:""}
+<p style="text-align:center;margin-top:24px;color:#999;font-size:11px;">Generated on ${new Date().toLocaleString()}</p>
+</body></html>`);
+  win.document.close();
+  win.print();
+};
+
+// Close modals on background click
+["modal-admit","modal-enc","modal-visit","modal-vitals","modal-charge","modal-med-req","modal-med-return","modal-discharge","modal-close-enc"].forEach(id=>{
+  const el=document.getElementById(id);
+  el.addEventListener("click",e=>{ if(e.target===el) el.style.display="none"; });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Clinic Queue" />
+<link rel="apple-touch-icon" href="assets/icon-192.png" />
+<title>Bed Management — Clinic Queue</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" type="image/svg+xml" href="assets/icon.svg" />
+<link rel="stylesheet" href="css/styles.css" />
+<style>
+.bed-table { width:100%;border-collapse:collapse;font-size:0.88rem; }
+.bed-table th { background:var(--paper-dim);padding:0.48rem 0.65rem;text-align:left;font-weight:600;color:var(--ink-soft);border-bottom:2px solid var(--line); }
+.bed-table td { padding:0.48rem 0.65rem;border-bottom:1px solid var(--line);vertical-align:middle; }
+.bed-table tr:last-child td { border-bottom:none; }
+.modal-bg { position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(28,36,34,0.55);z-index:100;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:1.5rem; }
+.modal-box { background:var(--paper);border-radius:var(--radius);padding:1.5rem;width:100%;max-width:480px;box-shadow:0 8px 32px rgba(15,76,79,0.18); }
+.modal-title { font-size:1.05rem;font-weight:700;color:var(--teal-900);margin:0 0 1.1rem; }
+.modal-footer { display:flex;justify-content:flex-end;gap:0.6rem;margin-top:1.1rem;padding-top:0.9rem;border-top:1px solid var(--line); }
+.filter-btns { display:flex;gap:0.4rem;flex-wrap:wrap; }
+.filter-btns .btn.active { background:var(--teal-900);color:#fff;border-color:var(--teal-900); }
+</style>
+<script>
+(function() {
+  const days = Number(localStorage.getItem("clinic-queue-backup-reminder-days") || 0);
+  if (days === 0) return;
+  const last = localStorage.getItem("clinic-queue-last-backup");
+  const overdue = !last || (Date.now() - new Date(last).getTime()) > days * 86400000;
+  if (!overdue) return;
+  document.addEventListener("DOMContentLoaded", function() {
+    const header = document.querySelector(".app-shell > header");
+    if (!header) return;
+    const banner = document.createElement("div");
+    banner.className = "backup-reminder-banner";
+    const daysAgo = last ? Math.floor((Date.now()-new Date(last).getTime())/86400000) : null;
+    banner.innerHTML = `<span>⚠</span><span>${daysAgo !== null ? `Backup overdue — last backup was ${daysAgo} day(s) ago.` : "No backup recorded yet."} <a href="backup.html">Back up now →</a></span><button onclick="this.parentElement.remove()" title="Dismiss">✕</button>`;
+    header.after(banner);
+  });
+})();
+</script>
+<script>
+  const _t = localStorage.getItem("clinic-queue-theme") || "light";
+  document.addEventListener("DOMContentLoaded", () => {
+    if (_t === "dark")     document.body.classList.add("theme-dark");
+    if (_t === "midnight") document.body.classList.add("theme-midnight");
+    if (_t === "forest")   document.body.classList.add("theme-forest");
+    if (_t === "sunset")   document.body.classList.add("theme-sunset");
+  });
+</script>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="brand"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" width="28" height="28" aria-hidden="true" style="flex-shrink:0;border-radius:6px;">
+  <rect width="72" height="72" rx="16" fill="white"/>
+  <text x="36" y="37" text-anchor="middle" font-size="28" font-weight="800" fill="#0F4C4F"
+    font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif">Q</text>
+  <polyline points="8,56 15,56 19,48 23,64 27,44 31,60 35,56 64,56"
+    fill="none" stroke="#E8A23D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg> <span data-clinic-name>Clinic Queue</span></div>
+    <nav id="nav-links">
+      <a href="reception.html">Reception</a>
+      <a href="patients.html">Patients</a>
+      <a href="billing.html">Billing</a>
+      <a href="inventory.html">Inventory</a>
+      <a href="inpatient.html">Inpatient</a>
+      <a href="board.html">Queue Board</a>
+    </nav>
+    <div class="user-pill"><span id="user-email">—</span><button id="logout-btn">Sign out</button></div>
+    <button id="theme-toggle-btn" title="Switch theme" style="background:none;border:none;cursor:pointer;font-size:1.1rem;padding:0.2rem 0.4rem;opacity:0.8;" aria-label="Switch theme">🎨</button>
+  </header>
+
+  <main class="page">
+    <div class="page-header">
+      <h1>Bed Management</h1>
+      <p id="bed-subtitle" class="muted">Loading…</p>
+    </div>
+
+    <!-- ── Bed Categories section ── -->
+    <div class="card" style="margin-bottom:1.25rem;">
+      <div class="flex-between" style="margin-bottom:0.9rem;flex-wrap:wrap;gap:0.5rem;">
+        <h2 style="margin:0;font-size:1rem;font-weight:700;color:var(--teal-900);">Bed Categories</h2>
+        <button class="btn btn-primary" id="add-category-btn">+ Add category</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="bed-table">
+          <thead>
+            <tr>
+              <th>Category name</th>
+              <th>Daily rent (₹)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="categories-tbody">
+            <tr><td colspan="3" class="muted" style="padding:1.2rem;text-align:center;">Loading categories…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── Beds section ── -->
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem;">
+        <h2 style="margin:0;font-size:1rem;font-weight:700;color:var(--teal-900);">Beds</h2>
+        <button class="btn btn-primary" id="add-bed-btn">+ Add bed</button>
+      </div>
+      <div class="filter-btns" style="margin-bottom:0.85rem;">
+        <button class="btn btn-sm btn-outline active" data-filter="all">All</button>
+        <button class="btn btn-sm btn-outline" data-filter="available">Available</button>
+        <button class="btn btn-sm btn-outline" data-filter="occupied">Occupied</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="bed-table">
+          <thead>
+            <tr>
+              <th>Bed name</th>
+              <th>Ward</th>
+              <th>Category</th>
+              <th>Daily rent ₹</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="beds-tbody">
+            <tr><td colspan="6" class="muted" style="padding:1.2rem;text-align:center;">Loading beds…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ── MODAL: Add / Edit Category ── -->
+<div id="category-modal" style="display:none;" class="modal-bg">
+  <div class="modal-box">
+    <h3 class="modal-title" id="category-modal-title">Add category</h3>
+    <input type="hidden" id="category-edit-id" />
+    <div class="field">
+      <label>Category name *</label>
+      <input id="category-name" type="text" placeholder="e.g. General Ward, ICU, Private" />
+    </div>
+    <div class="field">
+      <label>Daily rent ₹/day *</label>
+      <input id="category-rent" type="number" min="0" step="0.01" value="0" inputmode="decimal" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="category-cancel">Cancel</button>
+      <button class="btn btn-primary" id="category-save">Save category</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: Add / Edit Bed ── -->
+<div id="bed-modal" style="display:none;" class="modal-bg">
+  <div class="modal-box">
+    <h3 class="modal-title" id="bed-modal-title">Add bed</h3>
+    <input type="hidden" id="bed-edit-id" />
+    <div class="field">
+      <label>Bed name *</label>
+      <input id="bed-name" type="text" placeholder="e.g. Bed 101" />
+    </div>
+    <div class="field">
+      <label>Ward</label>
+      <input id="bed-ward" type="text" placeholder="e.g. General Ward, ICU, Private" />
+    </div>
+    <div class="field">
+      <label>Category</label>
+      <select id="bed-category">
+        <option value="">— select category —</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Daily rent ₹</label>
+      <input id="bed-rent" type="number" min="0" step="0.01" value="0" inputmode="decimal" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="bed-cancel">Cancel</button>
+      <button class="btn btn-primary" id="bed-save">Save bed</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import {
+  auth, authReady, db, onAuthStateChanged, signOut,
+  collection, addDoc, doc, updateDoc, deleteDoc, getDoc, getDocs,
+  query, orderBy, serverTimestamp
+} from "./js/firebase-config.js";
+import { applyClinicBranding } from "./js/queue-logic.js";
+import { attachThemeToggle } from "./js/theme.js";
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+await authReady;
+const user = auth.currentUser;
+if (!user) { window.location.href = "index.html"; }
+document.getElementById("user-email").textContent = user.email;
+document.getElementById("logout-btn").onclick = () =>
+  signOut(auth).then(() => { window.location.href = "index.html"; });
+attachThemeToggle();
+applyClinicBranding(db);
+
+// ── Dynamic nav based on role ─────────────────────────────────────────────────
+const userSnap = await getDoc(doc(db, "users", user.uid));
+if (userSnap.exists()) {
+  const role = userSnap.data().role;
+  const nav = document.getElementById("nav-links");
+  if (role === "admin") {
+    nav.innerHTML = `
+      <a href="admin.html">Admin Setup</a>
+      <a href="backup.html">Backup</a>
+      <a href="reception.html">Reception</a>
+      <a href="patients.html">Patients</a>
+      <a href="billing.html">Billing</a>
+      <a href="inventory.html">Inventory</a>
+      <a href="inpatient.html">Inpatient</a>
+      <a href="board.html">Queue Board</a>
+      <a href="bed-management.html" class="active">Bed Mgmt</a>`;
+  } else if (role === "reception") {
+    nav.innerHTML = `
+      <a href="reception.html">Reception</a>
+      <a href="patients.html">Patients</a>
+      <a href="billing.html">Billing</a>
+      <a href="inventory.html">Inventory</a>
+      <a href="inpatient.html">Inpatient</a>
+      <a href="board.html">Queue Board</a>
+      <a href="admin.html">Admin Setup</a>
+      <a href="bed-management.html" class="active">Bed Mgmt</a>`;
+  } else {
+    // fallback: add active link to current nav
+    const existingLinks = nav.querySelectorAll("a");
+    existingLinks.forEach(a => { if (a.href.includes("bed-management")) a.classList.add("active"); });
+  }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const el = (id) => document.getElementById(id);
+function esc(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let allCategories = [];
+let allBeds       = [];
+let bedFilter     = "all";
+
+// ── Real-time: bedCategories ──────────────────────────────────────────────────
+import { onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+onSnapshot(query(collection(db, "bedCategories"), orderBy("name")), (snap) => {
+  allCategories = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderCategories();
+  populateCategorySelect();
+});
+
+// ── Real-time: beds ───────────────────────────────────────────────────────────
+onSnapshot(query(collection(db, "beds"), orderBy("name")), (snap) => {
+  allBeds = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderBeds();
+  updateSubtitle();
+});
+
+// ── Subtitle ──────────────────────────────────────────────────────────────────
+function updateSubtitle() {
+  const total     = allBeds.length;
+  const available = allBeds.filter(b => b.status === "available").length;
+  el("bed-subtitle").textContent = `${total} bed${total !== 1 ? "s" : ""} · ${available} available`;
+}
+
+// ── Render categories ─────────────────────────────────────────────────────────
+function renderCategories() {
+  if (allCategories.length === 0) {
+    el("categories-tbody").innerHTML =
+      `<tr><td colspan="3" class="muted" style="padding:1.2rem;text-align:center;">No categories yet — click '+ Add category'.</td></tr>`;
+    return;
+  }
+  el("categories-tbody").innerHTML = allCategories.map(cat => `
+    <tr>
+      <td><strong>${esc(cat.name)}</strong></td>
+      <td>₹${Number(cat.dailyRent || 0).toFixed(2)}</td>
+      <td style="white-space:nowrap;text-align:right;">
+        <button class="btn btn-sm btn-outline" data-edit-cat="${cat.id}" style="margin-right:0.3rem;">Edit</button>
+        <button class="btn btn-sm btn-danger" data-delete-cat="${cat.id}" data-cat-name="${esc(cat.name)}">Delete</button>
+      </td>
+    </tr>`).join("");
+}
+
+// ── Render beds ───────────────────────────────────────────────────────────────
+function renderBeds() {
+  const filtered = allBeds.filter(b => {
+    if (bedFilter === "available") return b.status === "available";
+    if (bedFilter === "occupied")  return b.status === "occupied";
+    return true;
+  });
+  if (filtered.length === 0) {
+    el("beds-tbody").innerHTML =
+      `<tr><td colspan="6" class="muted" style="padding:1.2rem;text-align:center;">${allBeds.length === 0 ? "No beds yet — click '+ Add bed'." : "No beds match the current filter."}</td></tr>`;
+    return;
+  }
+  el("beds-tbody").innerHTML = filtered.map(bed => {
+    const isOccupied = bed.status === "occupied";
+    const statusBadge = isOccupied
+      ? `<span class="badge badge-called">Occupied</span>`
+      : `<span class="badge badge-completed">Available</span>`;
+    return `
+    <tr>
+      <td><strong>${esc(bed.name)}</strong></td>
+      <td>${esc(bed.ward || "—")}</td>
+      <td>${esc(bed.categoryName || "—")}</td>
+      <td>₹${Number(bed.dailyRent || 0).toFixed(2)}</td>
+      <td>${statusBadge}</td>
+      <td style="white-space:nowrap;text-align:right;">
+        <button class="btn btn-sm btn-outline" data-edit-bed="${bed.id}" style="margin-right:0.3rem;">Edit</button>
+        <button class="btn btn-sm btn-danger" data-delete-bed="${bed.id}" data-bed-name="${esc(bed.name)}" data-bed-status="${bed.status}">Delete</button>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+// ── Populate category select in bed modal ─────────────────────────────────────
+function populateCategorySelect(selectedId) {
+  el("bed-category").innerHTML =
+    `<option value="">— select category —</option>` +
+    allCategories.map(cat =>
+      `<option value="${cat.id}" data-rent="${cat.dailyRent || 0}"${cat.id === selectedId ? " selected" : ""}>${esc(cat.name)} (₹${Number(cat.dailyRent || 0).toFixed(2)}/day)</option>`
+    ).join("");
+}
+
+// ── Filter buttons ────────────────────────────────────────────────────────────
+document.querySelectorAll(".filter-btns .btn").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll(".filter-btns .btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    bedFilter = btn.dataset.filter;
+    renderBeds();
+  };
+});
+
+// ── Category table actions ────────────────────────────────────────────────────
+el("categories-tbody").addEventListener("click", async (e) => {
+  const editId   = e.target.dataset.editCat;
+  const deleteId = e.target.dataset.deleteCat;
+
+  if (editId) {
+    const cat = allCategories.find(c => c.id === editId);
+    if (cat) openCategoryModal(cat);
+  }
+
+  if (deleteId) {
+    const name = e.target.dataset.catName;
+    // Check if any beds use this category
+    const assigned = allBeds.filter(b => b.categoryId === deleteId);
+    if (assigned.length > 0) {
+      alert(`Cannot delete "${name}" — ${assigned.length} bed${assigned.length !== 1 ? "s are" : " is"} assigned to this category. Reassign or delete those beds first.`);
+      return;
+    }
+    if (!confirm(`Delete category "${name}"?\n\nThis cannot be undone.`)) return;
+    try {
+      const { deleteDoc: _del } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+      await _del(doc(db, "bedCategories", deleteId));
+    } catch (err) { alert("Delete failed: " + err.message); }
+  }
+});
+
+// ── Bed table actions ─────────────────────────────────────────────────────────
+el("beds-tbody").addEventListener("click", async (e) => {
+  const editId   = e.target.dataset.editBed;
+  const deleteId = e.target.dataset.deleteBed;
+
+  if (editId) {
+    const bed = allBeds.find(b => b.id === editId);
+    if (bed) openBedModal(bed);
+  }
+
+  if (deleteId) {
+    const name   = e.target.dataset.bedName;
+    const status = e.target.dataset.bedStatus;
+    if (status === "occupied") {
+      alert(`Cannot delete "${name}" — bed is currently occupied. Discharge the patient first.`);
+      return;
+    }
+    if (!confirm(`Delete bed "${name}"?\n\nThis cannot be undone.`)) return;
+    try {
+      const { deleteDoc: _del } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+      await _del(doc(db, "beds", deleteId));
+    } catch (err) { alert("Delete failed: " + err.message); }
+  }
+});
+
+// ── Category modal ────────────────────────────────────────────────────────────
+el("add-category-btn").onclick = () => openCategoryModal(null);
+
+function openCategoryModal(cat) {
+  el("category-modal-title").textContent = cat ? "Edit category" : "Add category";
+  el("category-edit-id").value = cat?.id || "";
+  el("category-name").value    = cat?.name || "";
+  el("category-rent").value    = cat?.dailyRent ?? 0;
+  el("category-modal").style.display = "flex";
+}
+
+el("category-cancel").onclick = () => el("category-modal").style.display = "none";
+
+el("category-save").onclick = async () => {
+  const name = el("category-name").value.trim();
+  if (!name) { alert("Category name is required."); return; }
+  const rent = Number(el("category-rent").value) || 0;
+  const editId = el("category-edit-id").value;
+  const data = { name, dailyRent: rent };
+  try {
+    if (editId) {
+      await updateDoc(doc(db, "bedCategories", editId), { ...data });
+      // Update all beds using this category
+      const affected = allBeds.filter(b => b.categoryId === editId);
+      await Promise.all(affected.map(b =>
+        updateDoc(doc(db, "beds", b.id), { categoryName: name, dailyRent: rent })
+      ));
+    } else {
+      data.createdAt = serverTimestamp();
+      await addDoc(collection(db, "bedCategories"), data);
+    }
+    el("category-modal").style.display = "none";
+  } catch (e) { alert("Save failed: " + e.message); }
+};
+
+// ── Bed modal ─────────────────────────────────────────────────────────────────
+el("add-bed-btn").onclick = () => openBedModal(null);
+
+function openBedModal(bed) {
+  el("bed-modal-title").textContent = bed ? "Edit bed" : "Add bed";
+  el("bed-edit-id").value = bed?.id || "";
+  el("bed-name").value    = bed?.name || "";
+  el("bed-ward").value    = bed?.ward || "";
+  el("bed-rent").value    = bed?.dailyRent ?? 0;
+  populateCategorySelect(bed?.categoryId || "");
+  el("bed-modal").style.display = "flex";
+}
+
+el("bed-cancel").onclick = () => el("bed-modal").style.display = "none";
+
+// Auto-fill rent when category changes
+el("bed-category").onchange = () => {
+  const opt = el("bed-category").selectedOptions[0];
+  if (opt && opt.dataset.rent !== undefined && opt.value !== "") {
+    el("bed-rent").value = Number(opt.dataset.rent).toFixed(2);
+  }
+};
+
+el("bed-save").onclick = async () => {
+  const name = el("bed-name").value.trim();
+  if (!name) { alert("Bed name is required."); return; }
+  const catId  = el("bed-category").value;
+  const catOpt = el("bed-category").selectedOptions[0];
+  const catName = catId ? (catOpt?.text.split(" (")[0] || "") : "";
+  const rent   = Number(el("bed-rent").value) || 0;
+  const editId = el("bed-edit-id").value;
+  const data = {
+    name,
+    ward:         el("bed-ward").value.trim(),
+    categoryId:   catId || null,
+    categoryName: catName || null,
+    dailyRent:    rent,
+  };
+  try {
+    if (editId) {
+      await updateDoc(doc(db, "beds", editId), data);
+    } else {
+      data.status    = "available";
+      data.createdAt = serverTimestamp();
+      await addDoc(collection(db, "beds"), data);
+    }
+    el("bed-modal").style.display = "none";
+  } catch (e) { alert("Save failed: " + e.message); }
+};
+
+// ── Close modals on Escape ────────────────────────────────────────────────────
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    el("category-modal").style.display = "none";
+    el("bed-modal").style.display = "none";
+  }
+});
+</script>
+</body>
+</html>

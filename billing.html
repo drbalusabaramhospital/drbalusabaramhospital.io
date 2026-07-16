@@ -84,6 +84,7 @@
       <a href="patients.html">Patients</a>
       <a href="billing.html" class="active">Billing</a>
       <a href="inventory.html">Inventory</a>
+      <a href="inpatient.html">Inpatient</a>
       <a href="board.html">Queue Board</a>
     </nav>
     <div class="user-pill"><span id="user-email">—</span><button id="logout-btn">Sign out</button></div>
@@ -231,11 +232,11 @@ document.getElementById("logout-btn").onclick = () => signOut(auth).then(() => w
 function adjustNavForRole() {
   const nav = document.getElementById("nav-links");
   if (currentRole === "doctor") {
-    nav.innerHTML = `<a href="doctor.html">My Queue</a><a href="patients.html">Patients</a><a href="billing.html" class="active">Billing</a><a href="inventory.html">Inventory</a><a href="board.html">Queue Board</a>`;
+    nav.innerHTML = `<a href="doctor.html">My Queue</a><a href="patients.html">Patients</a><a href="billing.html" class="active">Billing</a><a href="inventory.html">Inventory</a><a href="inpatient.html">Inpatient</a><a href="board.html">Queue Board</a>`;
   } else if (currentRole === "admin") {
-    nav.innerHTML = `<a href="admin.html">Admin Setup</a><a href="backup.html">Backup</a><a href="reception.html">Reception</a><a href="patients.html">Patients</a><a href="billing.html" class="active">Billing</a><a href="inventory.html">Inventory</a><a href="board.html">Queue Board</a>`;
+    nav.innerHTML = `<a href="admin.html">Admin Setup</a><a href="backup.html">Backup</a><a href="reception.html">Reception</a><a href="patients.html">Patients</a><a href="billing.html" class="active">Billing</a><a href="inventory.html">Inventory</a><a href="inpatient.html">Inpatient</a><a href="board.html">Queue Board</a>`;
   } else if (currentRole === "reception") {
-    nav.innerHTML = `<a href="reception.html">Reception</a><a href="patients.html">Patients</a><a href="billing.html" class="active">Billing</a><a href="inventory.html">Inventory</a><a href="board.html">Queue Board</a><a href="admin.html">Admin Setup</a>`;
+    nav.innerHTML = `<a href="reception.html">Reception</a><a href="patients.html">Patients</a><a href="billing.html" class="active">Billing</a><a href="inventory.html">Inventory</a><a href="inpatient.html">Inpatient</a><a href="board.html">Queue Board</a><a href="admin.html">Admin Setup</a>`;
   }
 }
 
