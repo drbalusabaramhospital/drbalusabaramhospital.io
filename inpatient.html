@@ -498,12 +498,20 @@ document.getElementById("pt-search-btn").onclick=async()=>{
   const res=document.getElementById("pt-results");
   res.innerHTML='<span class="muted">Searching…</span>';
   try{
-    const snap=await getDocs(query(collection(db,"patients"),where("nameLower",">=",q2.toLowerCase()),where("nameLower","<=",q2.toLowerCase()+""),limit(10)));
-    const snm=snap.docs.map(d=>({id:d.id,...d.data()}));
-    if(!snm.length){res.innerHTML='<span class="muted">No patients found. Fill details below to add.</span>';return;}
-    res.innerHTML=snm.map(p=>`<div style="padding:0.3rem 0.5rem;cursor:pointer;border-radius:4px;font-size:0.88rem;" class="hover-bg" onclick="selectPatient('${p.id}','${esc(p.name||"")}','${p.age||""}','${esc(p.gender||"")}','${esc(p.mobile||"")}')">
-      ${esc(p.name)} &nbsp;<span class="muted">${esc(p.mobile||"")}</span></div>`).join("");
-  }catch(e){res.innerHTML='<span class="muted">Error searching.</span>';}
+    const ql=q2.toLowerCase();
+    const [nameSnap,nlSnap,mobSnap]=await Promise.all([
+      getDocs(query(collection(db,"patients"),where("name",">=",q2),where("name","<=",q2+""),limit(10))),
+      getDocs(query(collection(db,"patients"),where("nameLower",">=",ql),where("nameLower","<=",ql+""),limit(10))),
+      getDocs(query(collection(db,"patients"),where("mobile","==",q2),limit(5)))
+    ]);
+    const seen=new Set();
+    const snm=[...nameSnap.docs,...nlSnap.docs,...mobSnap.docs]
+      .filter(d=>{if(seen.has(d.id))return false;seen.add(d.id);return true;})
+      .map(d=>({id:d.id,...d.data()}));
+    if(!snm.length){res.innerHTML='<span class="muted">No patients found. Fill in details below to admit as new.</span>';return;}
+    res.innerHTML=snm.map(p=>`<div style="padding:0.35rem 0.5rem;cursor:pointer;border-radius:4px;font-size:0.88rem;border-bottom:1px solid var(--line);" onclick="selectPatient('${p.id}','${esc(p.name||"")}','${p.age||""}','${esc(p.gender||"")}','${esc(p.mobile||"")}')">
+      <strong>${esc(p.name)}</strong> <span class="muted">${esc(p.mobile||"")}${p.age?" · "+p.age+" yrs":""} ${esc(p.gender||"")}</span></div>`).join("");
+  }catch(e){res.innerHTML='<span class="muted">Error: '+e.message+'</span>';}
 };
 
 window.selectPatient=(id,name,age,gender,mobile)=>{

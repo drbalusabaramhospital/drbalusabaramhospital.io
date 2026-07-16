@@ -663,6 +663,7 @@ document.getElementById("patient-form").addEventListener("submit", async (e) => 
   const existingId = document.getElementById("patient-id").value;
   const patientData = {
     name: document.getElementById("p-name").value.trim(),
+    nameLower: document.getElementById("p-name").value.trim().toLowerCase(),
     mobile: document.getElementById("p-mobile").value.trim(),
     age: Number(document.getElementById("p-age").value),
     gender: document.getElementById("p-gender").value,
