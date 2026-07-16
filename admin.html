@@ -87,6 +87,22 @@
         </div>
         <hr class="section-divider" />
         <div class="field">
+          <label for="clinic-address-input">Clinic address</label>
+          <input id="clinic-address-input" placeholder="e.g. 12, Main Road, Chennai – 600001" />
+          <p class="helper">Printed on discharge summaries and invoices.</p>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="clinic-phone-input">Phone / contact number</label>
+            <input id="clinic-phone-input" placeholder="e.g. +91 98765 43210" />
+          </div>
+          <div class="field">
+            <label for="clinic-email-input">Email</label>
+            <input id="clinic-email-input" type="email" placeholder="e.g. info@sunrise.clinic" />
+          </div>
+        </div>
+        <hr class="section-divider" />
+        <div class="field">
           <label for="self-service-url-input">Self-service booking URL (used to generate the QR code on the Queue Board)</label>
           <input id="self-service-url-input" placeholder="https://yourname.github.io/your-repo/self-service.html" />
           <p class="helper">Leave blank to auto-use this device's current page location.</p>
@@ -442,6 +458,9 @@ await authReady;
   if (snap.exists()) {
     const d = snap.data();
     if (d.name) document.getElementById("clinic-name-input").value = d.name;
+    if (d.clinicAddress) document.getElementById("clinic-address-input").value = d.clinicAddress;
+    if (d.clinicPhone) document.getElementById("clinic-phone-input").value = d.clinicPhone;
+    if (d.clinicEmail) document.getElementById("clinic-email-input").value = d.clinicEmail;
     if (d.selfServiceUrl) document.getElementById("self-service-url-input").value = d.selfServiceUrl;
     if (d.upiVpa) document.getElementById("upi-vpa-input").value = d.upiVpa;
     if (d.upiMerchantName) document.getElementById("upi-name-input").value = d.upiMerchantName;
@@ -470,6 +489,9 @@ await authReady;
 document.getElementById("branding-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const name = document.getElementById("clinic-name-input").value.trim();
+  const clinicAddress = document.getElementById("clinic-address-input").value.trim();
+  const clinicPhone = document.getElementById("clinic-phone-input").value.trim();
+  const clinicEmail = document.getElementById("clinic-email-input").value.trim();
   const selfServiceUrl = document.getElementById("self-service-url-input").value.trim();
   const upiVpa = document.getElementById("upi-vpa-input").value.trim();
   const upiMerchantName = document.getElementById("upi-name-input").value.trim();
@@ -485,6 +507,9 @@ document.getElementById("branding-form").addEventListener("submit", async (e) =>
   if (!name) return;
   await setDoc(doc(db, "clinicSettings", "main"), {
     name,
+    clinicAddress: clinicAddress || null,
+    clinicPhone: clinicPhone || null,
+    clinicEmail: clinicEmail || null,
     selfServiceUrl: selfServiceUrl || null,
     upiVpa: upiVpa || null,
     upiMerchantName: upiMerchantName || null,

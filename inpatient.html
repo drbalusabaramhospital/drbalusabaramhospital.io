@@ -1446,7 +1446,10 @@ window.printInvoice=async(invId)=>{
   ]);
   if(!invSnap.exists()) return;
   const inv=invSnap.data(); const e=encSnap.exists()?encSnap.data():{};
-  const clinicName=clinicSettings.clinicName||document.querySelector("[data-clinic-name]")?.textContent||"Hospital";
+  const clinicName=clinicSettings.name||document.querySelector("[data-clinic-name]")?.textContent||"Hospital";
+  const clinicAddress=clinicSettings.clinicAddress||"";
+  const clinicPhone=clinicSettings.clinicPhone||"";
+  const clinicEmail=clinicSettings.clinicEmail||"";
   // Enrich line items with details
   const detailRows=await Promise.all((inv.lineItems||[]).map(async li=>{
     if(li.type==="visit"&&li.visitId){
@@ -1475,7 +1478,10 @@ th{background:#f0f0f0;} .right{text-align:right;} .total-row{font-weight:700;bac
 </style></head><body>
 <div style="text-align:center;margin-bottom:12px;">
 <h1>${esc(clinicName)}</h1>
+${clinicAddress?`<div class="sub">${esc(clinicAddress)}</div>`:""}
+${(clinicPhone||clinicEmail)?`<div class="sub">${[clinicPhone?`📞 ${esc(clinicPhone)}`:"", clinicEmail?`✉ ${esc(clinicEmail)}`:""].filter(Boolean).join(" &nbsp;|&nbsp; ")}</div>`:""}
 ${inv.drugLicenseNumber?`<div class="sub">DL No: ${esc(inv.drugLicenseNumber)}</div>`:""}
+<hr style="border:none;border-top:1px solid #ccc;margin:8px 0;" />
 <div style="font-size:15px;font-weight:700;margin-top:4px;">TAX INVOICE</div>
 <div class="sub">Invoice No: <strong>${esc(inv.invoiceNumber)}</strong> &nbsp;|&nbsp; Date: ${fmtD(inv.createdAt)}</div>
 </div>
@@ -1670,7 +1676,7 @@ document.getElementById("gen-summary-btn").onclick=async()=>{
     ]);
     if(!encSnap.exists()) return;
     const e=encSnap.data();
-    const clinic=clinicSettings.clinicName||"Hospital";
+    const clinic=clinicSettings.name||"Hospital";
     const dlNo=drugLicenseNumber||e.drugLicenseNumber||"";
     const bedDays=daysBetween(e.admittedAt,e.dischargedAt||new Date());
     const th=`style="border:1px solid #ccc;padding:4px 8px;background:#f0f0f0;text-align:left;"`;
@@ -1929,7 +1935,10 @@ window.printSummary=async(encId)=>{
   ]);
   if(!encSnap.exists()) return;
   const e=encSnap.data();
-  const clinicName=clinicSettings.clinicName||document.querySelector("[data-clinic-name]")?.textContent||"Hospital";
+  const clinicName=clinicSettings.name||document.querySelector("[data-clinic-name]")?.textContent||"Hospital";
+  const clinicAddress=clinicSettings.clinicAddress||"";
+  const clinicPhone=clinicSettings.clinicPhone||"";
+  const clinicEmail=clinicSettings.clinicEmail||"";
   const dlNo=drugLicenseNumber||e.drugLicenseNumber||"";
   const now=e.dischargedAt||new Date();
   const bedDays=daysBetween(e.admittedAt,now);
@@ -1959,8 +1968,11 @@ th{background:#f0f0f0;} .right{text-align:right;} .total-row{font-weight:700;bac
 .badge-partial{background:#fff3cd;color:#856404;padding:1px 6px;border-radius:10px;font-size:11px;}
 </style></head><body>
 <h1>${esc(clinicName)}</h1>
+${clinicAddress?`<p style="text-align:center;color:#444;margin:2px 0;font-size:12px;">${esc(clinicAddress)}</p>`:""}
+${(clinicPhone||clinicEmail)?`<p style="text-align:center;color:#444;margin:2px 0;font-size:12px;">${[clinicPhone?`📞 ${esc(clinicPhone)}`:"", clinicEmail?`✉ ${esc(clinicEmail)}`:""].filter(Boolean).join(" &nbsp;|&nbsp; ")}</p>`:""}
 ${dlNo?`<p style="text-align:center;color:#555;margin:2px 0;font-size:12px;">Drug License No: ${esc(dlNo)}</p>`:""}
-<p style="text-align:center;color:#555;margin:4px 0 12px;">DISCHARGE SUMMARY</p>
+<hr style="border:none;border-top:1px solid #ccc;margin:8px 0;" />
+<p style="text-align:center;font-weight:700;letter-spacing:1px;margin:4px 0 12px;">DISCHARGE SUMMARY</p>
 <h2>Patient Details</h2>
 <table><tr><th>Name</th><td>${esc(e.patientName)}</td><th>Age/Gender</th><td>${esc(e.patientAge||"")} ${esc(e.patientGender||"")}</td></tr>
 <tr><th>Mobile</th><td>${esc(e.patientMobile||"—")}</td><th>Primary Doctor</th><td>Dr. ${esc(e.primaryDoctorName)}</td></tr>
