@@ -106,7 +106,10 @@
     <div class="card">
       <div class="flex-between" style="margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem;">
         <h2 style="margin:0;font-size:1rem;font-weight:700;color:var(--teal-900);">Beds</h2>
-        <button class="btn btn-primary" id="add-bed-btn">+ Add bed</button>
+        <div style="display:flex;gap:0.5rem;">
+          <button class="btn btn-primary" id="add-bed-btn">+ Add bed</button>
+          <button class="btn btn-outline" id="load-beds-btn" title="Pre-populate with standard hospital wards and beds">↓ Load defaults</button>
+        </div>
       </div>
       <div class="filter-btns" style="margin-bottom:0.85rem;">
         <button class="btn btn-sm btn-outline active" data-filter="all">All</button>
@@ -180,6 +183,28 @@
     <div class="modal-footer">
       <button class="btn btn-outline" id="bed-cancel">Cancel</button>
       <button class="btn btn-primary" id="bed-save">Save bed</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: Load Default Beds ── -->
+<div id="bed-defaults-modal" style="display:none;" class="modal-bg">
+  <div class="modal-box wide" style="max-width:680px;">
+    <h3 class="modal-title">Load default beds</h3>
+    <p style="font-size:0.88rem;color:var(--ink-soft);margin-bottom:1rem;">
+      Select the wards you want to load. Beds already in the system (matched by name) are skipped.
+      Categories are created automatically if they don't exist.
+    </p>
+    <div id="bed-defaults-list" style="display:flex;flex-direction:column;gap:0.5rem;max-height:420px;overflow-y:auto;padding-right:0.4rem;"></div>
+    <div class="modal-footer" style="justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding-top:0.75rem;margin-top:0.5rem;">
+      <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.88rem;font-weight:600;color:var(--teal-700);user-select:none;">
+        <input type="checkbox" id="bed-defaults-all" checked style="width:16px;height:16px;cursor:pointer;" />
+        Select / deselect all
+      </label>
+      <div style="display:flex;gap:0.6rem;">
+        <button class="btn btn-outline" id="bed-defaults-cancel">Cancel</button>
+        <button class="btn btn-primary" id="bed-defaults-load">Load selected beds</button>
+      </div>
     </div>
   </div>
 </div>
@@ -484,8 +509,150 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     el("category-modal").style.display = "none";
     el("bed-modal").style.display = "none";
+    el("bed-defaults-modal").style.display = "none";
   }
 });
+
+// ── Default beds seed data ─────────────────────────────────────────────────────
+// cat = category name, rent = daily rent ₹, beds = bed names in that ward
+const BED_DEFAULTS = [
+  {
+    ward: "General Ward",
+    cat: "General",      rent: 500,
+    beds: ["G-01","G-02","G-03","G-04","G-05","G-06","G-07","G-08","G-09","G-10"],
+  },
+  {
+    ward: "Semi-Private",
+    cat: "Semi-Private",  rent: 1200,
+    beds: ["SP-01","SP-02","SP-03","SP-04","SP-05","SP-06"],
+  },
+  {
+    ward: "Private",
+    cat: "Private",       rent: 2500,
+    beds: ["P-01","P-02","P-03","P-04"],
+  },
+  {
+    ward: "Deluxe Private",
+    cat: "Deluxe",        rent: 4000,
+    beds: ["D-01","D-02"],
+  },
+  {
+    ward: "ICU",
+    cat: "ICU",           rent: 6000,
+    beds: ["ICU-01","ICU-02","ICU-03","ICU-04"],
+  },
+  {
+    ward: "HDU",
+    cat: "HDU",           rent: 4500,
+    beds: ["HDU-01","HDU-02","HDU-03"],
+  },
+  {
+    ward: "NICU",
+    cat: "NICU",          rent: 7000,
+    beds: ["NICU-01","NICU-02","NICU-03"],
+  },
+  {
+    ward: "Labour Room",
+    cat: "Labour Room",   rent: 3000,
+    beds: ["LR-01","LR-02"],
+  },
+  {
+    ward: "Day Care",
+    cat: "Day Care",      rent: 800,
+    beds: ["DC-01","DC-02","DC-03","DC-04"],
+  },
+];
+
+el("load-beds-btn").onclick = () => {
+  el("bed-defaults-list").innerHTML = BED_DEFAULTS.map((w, i) => `
+    <div style="border:1px solid var(--line);border-radius:6px;padding:0.5rem 0.65rem;">
+      <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;margin:0;">
+        <input type="checkbox" class="bed-ward-chk" data-idx="${i}" checked style="width:15px;height:15px;flex-shrink:0;cursor:pointer;" />
+        <span style="font-weight:600;font-size:0.88rem;">${esc(w.ward)}</span>
+        <span style="font-size:0.78rem;color:var(--ink-soft);">${w.beds.length} beds · ₹${w.rent}/day</span>
+      </label>
+      <div style="font-size:0.75rem;color:var(--ink-soft);padding-left:1.5rem;margin-top:0.2rem;line-height:1.5;">
+        ${w.beds.join(" &middot; ")}
+      </div>
+    </div>`).join("");
+  el("bed-defaults-all").checked = true;
+  el("bed-defaults-modal").style.display = "flex";
+};
+
+el("bed-defaults-cancel").onclick = () => el("bed-defaults-modal").style.display = "none";
+
+el("bed-defaults-all").onchange = function() {
+  document.querySelectorAll(".bed-ward-chk").forEach(c => { c.checked = this.checked; });
+};
+
+el("bed-defaults-load").onclick = async () => {
+  const selectedIdxs = [...document.querySelectorAll(".bed-ward-chk:checked")].map(c => Number(c.dataset.idx));
+  if (selectedIdxs.length === 0) { alert("Select at least one ward."); return; }
+
+  const existingBedNames = new Set(allBeds.map(b => b.name.toLowerCase()));
+  const existingCatNames = new Set(allCategories.map(c => c.name.toLowerCase()));
+
+  const btn = el("bed-defaults-load");
+  btn.disabled = true; btn.textContent = "Loading…";
+
+  try {
+    const { writeBatch } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+
+    // First pass: ensure all needed categories exist
+    const catIdMap = {};
+    allCategories.forEach(c => { catIdMap[c.name.toLowerCase()] = c.id; });
+
+    for (const idx of selectedIdxs) {
+      const w = BED_DEFAULTS[idx];
+      if (!existingCatNames.has(w.cat.toLowerCase())) {
+        const ref = await addDoc(collection(db, "bedCategories"), {
+          name: w.cat, dailyRent: w.rent, createdAt: serverTimestamp(),
+        });
+        catIdMap[w.cat.toLowerCase()] = ref.id;
+        existingCatNames.add(w.cat.toLowerCase());
+      }
+    }
+
+    // Second pass: batch-add beds that don't already exist
+    const toAdd = [];
+    for (const idx of selectedIdxs) {
+      const w = BED_DEFAULTS[idx];
+      const catId = catIdMap[w.cat.toLowerCase()] || null;
+      for (const bedName of w.beds) {
+        if (!existingBedNames.has(bedName.toLowerCase())) {
+          toAdd.push({ name: bedName, ward: w.ward, categoryId: catId, categoryName: w.cat, dailyRent: w.rent });
+        }
+      }
+    }
+
+    if (toAdd.length === 0) {
+      alert("All selected beds already exist. Nothing to add.");
+      el("bed-defaults-modal").style.display = "none";
+      btn.disabled = false; btn.textContent = "Load selected beds";
+      return;
+    }
+
+    const BATCH_SIZE = 400;
+    let loaded = 0;
+    for (let i = 0; i < toAdd.length; i += BATCH_SIZE) {
+      const batch = writeBatch(db);
+      toAdd.slice(i, i + BATCH_SIZE).forEach(bed => {
+        const ref = doc(collection(db, "beds"));
+        batch.set(ref, { ...bed, status: "available", createdAt: serverTimestamp() });
+      });
+      await batch.commit();
+      loaded += Math.min(BATCH_SIZE, toAdd.length - i);
+      btn.textContent = `Loading ${loaded} / ${toAdd.length}…`;
+    }
+
+    el("bed-defaults-modal").style.display = "none";
+    alert(`Done — ${loaded} bed${loaded !== 1 ? "s" : ""} added across ${selectedIdxs.length} ward${selectedIdxs.length !== 1 ? "s" : ""}.`);
+  } catch (err) {
+    alert("Load failed: " + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "Load selected beds";
+  }
+};
 </script>
 </body>
 </html>
