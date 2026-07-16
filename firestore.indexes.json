@@ -82,6 +82,38 @@
       ]
     },
     {
+      "collectionGroup": "encounterVisits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "encounterId", "order": "ASCENDING" },
+        { "fieldPath": "visitedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "encounterMedRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "encounterId", "order": "ASCENDING" },
+        { "fieldPath": "requestedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "encounterVitals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "encounterId", "order": "ASCENDING" },
+        { "fieldPath": "recordedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "encounterCharges",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "encounterId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "encounterMedRequests",
       "queryScope": "COLLECTION",
       "fields": [
