@@ -74,6 +74,14 @@
       ]
     },
     {
+      "collectionGroup": "inpatientEncounters",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "patientId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "encounterVisits",
       "queryScope": "COLLECTION",
       "fields": [
