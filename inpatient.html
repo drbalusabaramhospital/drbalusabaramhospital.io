@@ -1075,6 +1075,21 @@ async function generateInvoiceNumber(){
   return `INV-${yr}-${String(num).padStart(5,"0")}`;
 }
 
+// Returns true if bedId was occupied at `time` by any encounter other than excludeEncId.
+// Uses the in-memory allEncounters snapshot (includes bedHistory segments).
+function isBedOccupiedAt(bedId, time, excludeEncId){
+  return allEncounters.some(enc=>{
+    if(enc.id===excludeEncId) return false;
+    const start=toDate(enc.admittedAt);
+    const end=enc.dischargedAt?toDate(enc.dischargedAt)
+      :(enc.status==="closed"?toDate(enc.updatedAt||enc.admittedAt):new Date());
+    if(enc.bedId===bedId&&start<=time&&time<end) return true;
+    return (enc.bedHistory||[]).some(seg=>
+      seg.bedId===bedId&&toDate(seg.startTime)<=time&&toDate(seg.endTime)>time
+    );
+  });
+}
+
 // ── BED SEGMENTS HELPER ──
 // For encounters with bed transfers, billing is per-segment (each bed has its own rate+duration).
 // Legacy encounters (no bedHistory) use the existing single-rate global billedDays path.
@@ -1118,15 +1133,23 @@ window.openTransferBed=async(encId)=>{
     `<strong>Patient:</strong> ${esc(currentEnc.patientName)}
      &nbsp;|&nbsp; <strong>Current bed:</strong> ${esc(currentEnc.bedName)} (${esc(currentEnc.bedWard||"")})
      &nbsp;|&nbsp; <strong>Rate:</strong> ₹${fmt(currentEnc.dailyRent||0)}/day`;
-  const availBeds=allBeds.filter(b=>b.status==="available"&&b.id!==currentEnc.bedId);
   const sel=document.getElementById("transfer-new-bed");
-  sel.innerHTML='<option value="">— select available bed —</option>'
-    +availBeds.map(b=>`<option value="${b.id}"
-      data-rent="${b.dailyRent||0}"
-      data-name="${esc(b.bedName||b.name||b.id)}"
-      data-ward="${esc(b.ward||b.bedWard||"")}"
-      data-cat="${esc(b.category||b.bedCategory||"")}"
-      >${esc(b.bedName||b.name||b.id)} — ${esc(b.ward||b.bedWard||"")} (₹${fmt(b.dailyRent||0)}/day)</option>`).join("");
+  function refreshBedOptions(dtVal){
+    const t=dtVal?new Date(dtVal):new Date();
+    const beds=allBeds.filter(b=>b.id!==currentEnc.bedId&&!isBedOccupiedAt(b.id,t,currentEncId));
+    const prev=sel.value;
+    sel.innerHTML='<option value="">— select available bed —</option>'
+      +beds.map(b=>`<option value="${b.id}"
+        data-rent="${b.dailyRent||0}"
+        data-name="${esc(b.bedName||b.name||b.id)}"
+        data-ward="${esc(b.ward||b.bedWard||"")}"
+        data-cat="${esc(b.category||b.bedCategory||"")}"
+        >${esc(b.bedName||b.name||b.id)} — ${esc(b.ward||b.bedWard||"")} (₹${fmt(b.dailyRent||0)}/day)</option>`).join("");
+    if(prev) sel.value=prev; // keep selection if still available
+    if(!sel.value) document.getElementById("transfer-new-bed-info").style.display="none";
+    const count=beds.length;
+    sel.title=`${count} bed${count!==1?"s":""} available at this date/time`;
+  }
   sel.onchange=()=>{
     const opt=sel.selectedOptions[0];
     const info=document.getElementById("transfer-new-bed-info");
@@ -1135,11 +1158,14 @@ window.openTransferBed=async(encId)=>{
     info.innerHTML=`New bed: <strong>${opt.dataset.name}</strong> — ${opt.dataset.ward} | Category: ${opt.dataset.cat} | Rate: ₹${fmt(Number(opt.dataset.rent))}/day`;
   };
   const now=new Date(); now.setSeconds(0,0);
-  document.getElementById("transfer-datetime").value=now.toISOString().slice(0,16);
+  const dtInput=document.getElementById("transfer-datetime");
+  dtInput.value=now.toISOString().slice(0,16);
   const minDT=toDate(currentEnc.admittedAt);
   const maxDT=currentEnc.dischargedAt?toDate(currentEnc.dischargedAt):new Date();
-  document.getElementById("transfer-datetime").min=minDT.toISOString().slice(0,16);
-  document.getElementById("transfer-datetime").max=maxDT.toISOString().slice(0,16);
+  dtInput.min=minDT.toISOString().slice(0,16);
+  dtInput.max=maxDT.toISOString().slice(0,16);
+  dtInput.onchange=()=>refreshBedOptions(dtInput.value);
+  refreshBedOptions(dtInput.value);
   document.getElementById("transfer-reason").value="";
   document.getElementById("transfer-new-bed-info").style.display="none";
   document.getElementById("modal-transfer-bed").style.display="flex";
@@ -1191,6 +1217,36 @@ document.getElementById("transfer-confirm").onclick=async()=>{
   btn.disabled=false;
 };
 
+window.deleteBedTransfer=async(encId,segIdx)=>{
+  const enc=currentEnc;
+  const history=[...(enc.bedHistory||[])];
+  if(!history.length){alert("No transfer history found.");return;}
+  if(segIdx!==history.length-1){alert("Only the most recent transfer can be deleted.");return;}
+  const seg=history[segIdx];
+  if(!confirm(`Delete transfer to "${enc.bedName}"?\n\nPatient will revert to: ${seg.bedName} (₹${fmt(seg.dailyRent||0)}/day)\nFrom: ${fmtDT(seg.startTime)}\n\nAny bed rent invoiced for "${enc.bedName}" will need to be manually reviewed.`)) return;
+  try{
+    const prevBedSnap=await getDoc(doc(db,"beds",seg.bedId));
+    const prevBed=prevBedSnap.exists()?prevBedSnap.data():null;
+    const newHistory=history.slice(0,segIdx);
+    const batch=writeBatch(db);
+    batch.update(doc(db,"beds",enc.bedId),{status:"available",currentEncounterId:null,updatedAt:serverTimestamp()});
+    if(prevBed&&(prevBed.status==="available"||prevBed.currentEncounterId===encId)){
+      batch.update(doc(db,"beds",seg.bedId),{status:"occupied",currentEncounterId:encId,updatedAt:serverTimestamp()});
+    }
+    batch.update(doc(db,"inpatientEncounters",encId),{
+      bedId:seg.bedId, bedName:seg.bedName, bedWard:seg.bedWard||"",
+      bedCategory:seg.bedCategory||"", dailyRent:seg.dailyRent||0,
+      currentBedStartTime:seg.startTime,
+      bedHistory:newHistory,
+      updatedAt:serverTimestamp()
+    });
+    await batch.commit();
+    const freshSnap=await getDoc(doc(db,"inpatientEncounters",encId));
+    if(freshSnap.exists()) currentEnc={id:freshSnap.id,...freshSnap.data()};
+    loadBill();
+  }catch(e){alert("Error deleting transfer: "+e.message);}
+};
+
 async function loadBill(){
   const el=document.getElementById("bill-content");
   if(!currentEnc){el.innerHTML=""; return;}
@@ -1221,6 +1277,49 @@ async function loadBill(){
     const balance=Math.max(0,grandTotal-totalPaid-totalDiscounts);
 
     let html="";
+    // ── Bed transfer history ──
+    const bedHist=currentEnc.bedHistory||[];
+    if(bedHist.length){
+      html+=`<div style="margin-bottom:0.8rem;padding:0.5rem 0.7rem;background:var(--surface-alt,#f0f4ff);border:1px solid var(--border);border-radius:var(--radius);">
+        <p style="font-weight:600;font-size:0.82rem;color:var(--primary,#4f46e5);margin:0 0 0.35rem;">🔀 BED TRANSFERS</p>
+        <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
+          <thead><tr style="color:var(--ink-soft);">
+            <th style="padding:0.2rem 0.4rem;text-align:left;font-weight:500;">From</th>
+            <th style="padding:0.2rem 0.4rem;text-align:left;font-weight:500;">Bed</th>
+            <th style="padding:0.2rem 0.4rem;text-align:left;font-weight:500;">Ward</th>
+            <th style="padding:0.2rem 0.4rem;text-align:right;font-weight:500;">Rate</th>
+            <th style="padding:0.2rem 0.4rem;text-align:right;font-weight:500;">Days</th>
+            <th style="padding:0.2rem 0.4rem;text-align:left;font-weight:500;">To</th>
+            <th style="padding:0.2rem 0.4rem;"></th>
+          </tr></thead><tbody>`;
+      bedHist.forEach((seg,i)=>{
+        const days=daysBetween(seg.startTime,seg.endTime||new Date());
+        const isLast=i===bedHist.length-1;
+        html+=`<tr style="border-top:1px solid var(--line);">
+          <td style="padding:0.2rem 0.4rem;">${fmtDT(seg.startTime)}</td>
+          <td style="padding:0.2rem 0.4rem;"><strong>${esc(seg.bedName)}</strong></td>
+          <td style="padding:0.2rem 0.4rem;">${esc(seg.bedWard||"")}</td>
+          <td style="padding:0.2rem 0.4rem;text-align:right;">₹${fmt(seg.dailyRent||0)}/day</td>
+          <td style="padding:0.2rem 0.4rem;text-align:right;">${days}</td>
+          <td style="padding:0.2rem 0.4rem;color:var(--ink-soft);">${fmtDT(seg.endTime)}</td>
+          <td style="padding:0.2rem 0.4rem;">${isLast&&currentEnc.status==="active"
+            ?`<button class="btn btn-sm btn-danger" style="padding:0.1rem 0.5rem;font-size:0.75rem;" onclick="deleteBedTransfer('${currentEncId}',${i})">🗑 Delete</button>`
+            :""}</td>
+        </tr>`;
+      });
+      // Current bed row
+      const curDays=daysBetween(currentEnc.currentBedStartTime||currentEnc.admittedAt,currentEnc.dischargedAt||new Date());
+      html+=`<tr style="border-top:1px solid var(--line);background:var(--paper-dim);">
+        <td style="padding:0.2rem 0.4rem;">${fmtDT(currentEnc.currentBedStartTime||currentEnc.admittedAt)}</td>
+        <td style="padding:0.2rem 0.4rem;"><strong>${esc(currentEnc.bedName)}</strong> <span style="font-size:0.75rem;color:var(--teal-600,#0d9488);">● current</span></td>
+        <td style="padding:0.2rem 0.4rem;">${esc(currentEnc.bedWard||"")}</td>
+        <td style="padding:0.2rem 0.4rem;text-align:right;">₹${fmt(currentEnc.dailyRent||0)}/day</td>
+        <td style="padding:0.2rem 0.4rem;text-align:right;">${curDays}</td>
+        <td style="padding:0.2rem 0.4rem;color:var(--ink-soft);">${currentEnc.dischargedAt?fmtDT(currentEnc.dischargedAt):"—"}</td>
+        <td></td>
+      </tr>`;
+      html+=`</tbody></table></div>`;
+    }
     if(invoicesSnap.docs.length){
       html+=`<p style="font-weight:600;margin:0 0 0.4rem;font-size:0.88rem;color:var(--ink-soft);">INVOICES</p>`;
       html+=`<table style="width:100%;border-collapse:collapse;font-size:0.85rem;margin-bottom:0.8rem;">
